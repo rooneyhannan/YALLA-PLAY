@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'songs_screen.dart';
-import 'tuner_screen.dart';
+import '../../song_library/presentation/songs_screen.dart';
+import '../../tuner/presentation/tuner_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
