@@ -15,7 +15,7 @@ class _MainScreenState extends State<MainScreen> {
   static const List<Widget> _widgetOptions = <Widget>[
     Center(
       child: Text(
-        'Karriere Screen',
+        'YALLA-PLAY V2 TEST',
         style: TextStyle(color: Colors.white, fontSize: 24),
       ),
     ),
