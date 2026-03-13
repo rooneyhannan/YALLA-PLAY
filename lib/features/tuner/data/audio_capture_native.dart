@@ -10,10 +10,13 @@ AudioCaptureBase createAudioCapture() => NativeAudioCapture();
 class NativeAudioCapture extends AudioCaptureBase {
   final FlutterAudioCapture _capture = FlutterAudioCapture();
   bool _initialized = false;
+  int _actualSampleRate = 44100;
+
+  @override
+  int get actualSampleRate => _actualSampleRate;
 
   @override
   Future<bool> init() async {
-    // Request mic permission on native platforms
     final status = await Permission.microphone.request();
     if (!status.isGranted) return false;
 
@@ -32,6 +35,7 @@ class NativeAudioCapture extends AudioCaptureBase {
     int sampleRate = 44100,
     int bufferSize = 4096,
   }) async {
+    _actualSampleRate = sampleRate;
     await _capture.start(
       (Float32List buffer) async => onData(buffer),
       (Object error) => onError(error),
