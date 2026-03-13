@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import '../models/song_data.dart';
+import '../data/song_data.dart';
 
 class GameNote {
   final Note note;

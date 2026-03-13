@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/song.dart';
+import '../domain/song.dart';
 import 'song_start_screen.dart';
 
 class SongsScreen extends StatelessWidget {
