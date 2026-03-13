@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../data/audio_manager.dart';
 
@@ -9,7 +8,8 @@ class TunerScreen extends StatefulWidget {
   State<TunerScreen> createState() => _TunerScreenState();
 }
 
-class _TunerScreenState extends State<TunerScreen> {
+class _TunerScreenState extends State<TunerScreen>
+    with SingleTickerProviderStateMixin {
   // Standard guitar tuning targets
   static const List<_GuitarString> _strings = [
     _GuitarString(code: 'E2', name: 'E', hz: 82.41),
@@ -24,23 +24,59 @@ class _TunerScreenState extends State<TunerScreen> {
   double? _frequency;
   int? _activeStringIndex;
   String _noteName = '--';
-  String _statusText = 'Listening...';
-  double _diffHz = 0.0; // current - target
+  String _statusText = 'Tap mic to start';
+  double _diffHz = 0.0;
 
-  // Throttle UI updates to keep it smooth
+  // Throttle UI updates
   DateTime _lastUiUpdate = DateTime.fromMillisecondsSinceEpoch(0);
   static const Duration _minUiInterval = Duration(milliseconds: 60);
+
+  // Mic pulse animation
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.35).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    // Listen to mic status changes
+    AudioManager.instance.micStatus.addListener(_onMicStatusChanged);
+
+    // Auto-start listening
     AudioManager.instance.startListening(_onPitchDetected);
+  }
+
+  void _onMicStatusChanged() {
+    if (!mounted) return;
+    final status = AudioManager.instance.micStatus.value;
+    setState(() {
+      if (status == MicStatus.active) {
+        _pulseController.repeat(reverse: true);
+        _statusText = 'Listening...';
+      } else {
+        _pulseController.stop();
+        _pulseController.reset();
+        if (status == MicStatus.denied) {
+          _statusText = 'Mic permission denied';
+        } else if (status == MicStatus.error) {
+          _statusText = 'Mic error';
+        } else if (status == MicStatus.requesting) {
+          _statusText = 'Requesting mic...';
+        }
+      }
+    });
   }
 
   void _onPitchDetected(double freq) {
     if (!mounted) return;
 
-    // Per requirement: treat 0 / -1 as "Listening..."
     if (freq <= 0) {
       final now = DateTime.now();
       if (now.difference(_lastUiUpdate) < _minUiInterval) return;
@@ -94,8 +130,28 @@ class _TunerScreenState extends State<TunerScreen> {
     );
   }
 
+  void _toggleListening() {
+    final status = AudioManager.instance.micStatus.value;
+    if (status == MicStatus.active) {
+      AudioManager.instance.stopListening();
+      setState(() {
+        _frequency = null;
+        _activeStringIndex = null;
+        _noteName = '--';
+        _statusText = 'Tap mic to start';
+        _diffHz = 0.0;
+      });
+    } else if (status == MicStatus.inactive ||
+        status == MicStatus.denied ||
+        status == MicStatus.error) {
+      AudioManager.instance.startListening(_onPitchDetected);
+    }
+  }
+
   @override
   void dispose() {
+    AudioManager.instance.micStatus.removeListener(_onMicStatusChanged);
+    _pulseController.dispose();
     AudioManager.instance.stopListening();
     super.dispose();
   }
@@ -108,10 +164,8 @@ class _TunerScreenState extends State<TunerScreen> {
     final bool tuned = _statusText == 'Tuned';
     final Color accent = tuned ? const Color(0xFF00E676) : Colors.redAccent;
 
-    // Needle position: map +/-10 Hz to [-1..1] and clamp
-    final double needle = _frequency == null
-        ? 0.0
-        : (_diffHz / 10.0).clamp(-1.0, 1.0);
+    final double needle =
+        _frequency == null ? 0.0 : (_diffHz / 10.0).clamp(-1.0, 1.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
@@ -120,6 +174,15 @@ class _TunerScreenState extends State<TunerScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             children: [
+              // Mic status indicator
+              _MicIndicator(
+                micStatus: AudioManager.instance.micStatus,
+                pulseAnimation: _pulseAnimation,
+                onTap: _toggleListening,
+              ),
+
+              const SizedBox(height: 16),
+
               // Top: String circles
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -201,19 +264,106 @@ class _TunerScreenState extends State<TunerScreen> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Helper data classes
+// ---------------------------------------------------------------------------
+
 class _GuitarString {
-  final String code; // E2, A2...
-  final String name; // E, A...
+  final String code;
+  final String name;
   final double hz;
-  const _GuitarString({required this.code, required this.name, required this.hz});
+  const _GuitarString(
+      {required this.code, required this.name, required this.hz});
 }
 
 class _MappedString {
   final int index;
   final _GuitarString string;
-  final double diffHz; // detected - target
-  const _MappedString({required this.index, required this.string, required this.diffHz});
+  final double diffHz;
+  const _MappedString(
+      {required this.index, required this.string, required this.diffHz});
 }
+
+// ---------------------------------------------------------------------------
+// Mic status indicator widget
+// ---------------------------------------------------------------------------
+
+class _MicIndicator extends StatelessWidget {
+  final ValueNotifier<MicStatus> micStatus;
+  final Animation<double> pulseAnimation;
+  final VoidCallback onTap;
+
+  const _MicIndicator({
+    required this.micStatus,
+    required this.pulseAnimation,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<MicStatus>(
+      valueListenable: micStatus,
+      builder: (context, status, _) {
+        final bool active = status == MicStatus.active;
+        final bool denied = status == MicStatus.denied;
+        final bool error = status == MicStatus.error;
+        final bool requesting = status == MicStatus.requesting;
+
+        final Color dotColor = active
+            ? const Color(0xFF00E676)
+            : (denied || error)
+                ? Colors.redAccent
+                : requesting
+                    ? Colors.amber
+                    : Colors.white38;
+
+        final String label = active
+            ? 'MIC ACTIVE'
+            : denied
+                ? 'MIC DENIED'
+                : error
+                    ? 'MIC ERROR'
+                    : requesting
+                        ? 'REQUESTING...'
+                        : 'MIC OFF';
+
+        final IconData icon = denied
+            ? Icons.mic_off_rounded
+            : Icons.mic_rounded;
+
+        return GestureDetector(
+          onTap: onTap,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (active)
+                ScaleTransition(
+                  scale: pulseAnimation,
+                  child: Icon(icon, color: dotColor, size: 22),
+                )
+              else
+                Icon(icon, color: dotColor, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: dotColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// String circle widget
+// ---------------------------------------------------------------------------
 
 class _StringCircle extends StatelessWidget {
   final String label;
@@ -251,8 +401,12 @@ class _StringCircle extends StatelessWidget {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Tuner needle widget
+// ---------------------------------------------------------------------------
+
 class _TunerNeedle extends StatelessWidget {
-  final double value; // -1..1
+  final double value;
   final Color accent;
   final bool tuned;
 
@@ -314,8 +468,9 @@ class _TunerNeedle extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                           boxShadow: [
                             BoxShadow(
-                              color: (tuned ? const Color(0xFF00E676) : accent)
-                                  .withOpacity(0.35),
+                              color:
+                                  (tuned ? const Color(0xFF00E676) : accent)
+                                      .withOpacity(0.35),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             )
@@ -332,8 +487,12 @@ class _TunerNeedle extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
-              Text('LOW', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold)),
-              Text('HIGH', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.bold)),
+              Text('LOW',
+                  style: TextStyle(
+                      color: Colors.white38, fontWeight: FontWeight.bold)),
+              Text('HIGH',
+                  style: TextStyle(
+                      color: Colors.white38, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -341,4 +500,3 @@ class _TunerNeedle extends StatelessWidget {
     );
   }
 }
-
