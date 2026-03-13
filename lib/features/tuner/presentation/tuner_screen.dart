@@ -49,8 +49,9 @@ class _TunerScreenState extends State<TunerScreen>
     // Listen to mic status changes
     AudioManager.instance.micStatus.addListener(_onMicStatusChanged);
 
-    // Auto-start listening
-    AudioManager.instance.startListening(_onPitchDetected);
+    // Do NOT auto-start here!  Chrome's autoplay policy requires that the
+    // AudioContext is created/resumed inside a user-gesture callback (tap).
+    // The user taps the mic indicator (_toggleListening) to begin.
   }
 
   void _onMicStatusChanged() {
