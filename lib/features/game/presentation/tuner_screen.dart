@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../services/audio_manager.dart';
+import '../data/audio_manager.dart';
 
 class TunerScreen extends StatefulWidget {
   const TunerScreen({super.key});

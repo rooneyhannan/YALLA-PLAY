@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'screens/splash_screen.dart';
-import 'theme/app_theme.dart';
+import 'features/game/presentation/splash_screen.dart';
+import 'core/theme/app_theme.dart';
 
 void main() {
   runApp(const YallaPlayApp());
