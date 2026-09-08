@@ -15,8 +15,11 @@ class AppTheme {
     fontFamily: 'IBM Plex Sans Arabic',
     scaffoldBackgroundColor: background,
     colorScheme: const ColorScheme.dark(
-      primary: gold, onPrimary: Color(0xFF3C2F00),
-      secondary: Color(0xFFFFB4A5), surface: surface, onSurface: text,
+      primary: gold,
+      onPrimary: Color(0xFF3C2F00),
+      secondary: Color(0xFFFFB4A5),
+      surface: surface,
+      onSurface: text,
     ),
     textTheme: const TextTheme(
       headlineLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
@@ -27,12 +30,19 @@ class AppTheme {
       labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
     ),
     appBarTheme: const AppBarTheme(backgroundColor: background, elevation: 0),
-    filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(
-      backgroundColor: gold, foregroundColor: const Color(0xFF241A00),
-      minimumSize: const Size(48, 48),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      textStyle: const TextStyle(fontFamily: 'IBM Plex Sans Arabic', fontSize: 16, fontWeight: FontWeight.w700),
-    )),
-    snackBarTheme: const SnackBarTheme(behavior: SnackBarBehavior.floating),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: gold,
+        foregroundColor: const Color(0xFF241A00),
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        textStyle: const TextStyle(
+          fontFamily: 'IBM Plex Sans Arabic',
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+    snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
   );
 }
