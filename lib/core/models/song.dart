@@ -1,97 +1,148 @@
-import 'package:flutter/material.dart';
-
 class Song {
+  final String id;
   final String title;
   final String artist;
   final String category;
+  final String image;
+  final String difficulty;
   final bool isPremium;
-  final Color coverColor;
-
   const Song({
+    required this.id,
     required this.title,
     required this.artist,
     required this.category,
+    required this.image,
+    this.difficulty = 'مبتدئ',
     this.isPremium = false,
-    required this.coverColor,
   });
+  bool get hasChart => id == 'badak';
 }
 
-final List<Song> dummySongs = [
-  // 1. Mandatory First Song (Playable)
-  const Song(
-    title: "Ba'dak Ala Bali",
-    artist: "Fairuz",
-    category: "Classic Arab",
-    isPremium: false,
-    coverColor: Colors.teal,
+const songs = <Song>[
+  Song(
+    id: 'badak',
+    title: 'Ba’dak Ala Bali',
+    artist: 'فيروز',
+    category: 'طرب',
+    image: 's1_2.png',
   ),
-  
-  // Arab Hits
-  const Song(
-    title: "Tamally Maak",
-    artist: "Amr Diab",
-    category: "Arab Pop",
+  Song(
+    id: 'life',
+    title: 'Life by the Drop',
+    artist: 'Stevie Ray Vaughan & Double Trouble',
+    category: 'البلوز',
+    image: 's2_1.png',
     isPremium: true,
-    coverColor: Colors.deepPurple,
   ),
-  const Song(
-    title: "Nassam Alayna El Hawa",
-    artist: "Fairuz",
-    category: "Classic Arab",
-    isPremium: false,
-    coverColor: Colors.indigo,
-  ),
-  const Song(
-    title: "3 Daqat",
-    artist: "Abu ft. Yousra",
-    category: "Arab Pop",
-    isPremium: false,
-    coverColor: Colors.blueAccent,
-  ),
-  const Song(
-    title: "C'est La Vie",
-    artist: "Cheb Khaled",
-    category: "Rai",
+  Song(
+    id: 'house',
+    title: 'House Of Memories',
+    artist: 'Panic! At The Disco',
+    category: 'بوب',
+    image: 's2_2.png',
+    difficulty: 'متوسط',
     isPremium: true,
-    coverColor: Colors.orange,
   ),
-  
-  // Western Hits
-  const Song(
-    title: "Shape of You",
-    artist: "Ed Sheeran",
-    category: "Pop",
+  Song(
+    id: 'snow',
+    title: 'Snow',
+    artist: 'Zach Bryan',
+    category: 'كونتري',
+    image: 's2_3.png',
     isPremium: true,
-    coverColor: Colors.teal,
   ),
-  const Song(
-    title: "Nothing Else Matters",
-    artist: "Metallica",
-    category: "Rock",
+  Song(
+    id: 'taxman',
+    title: 'Taxman',
+    artist: 'The Beatles',
+    category: 'روك',
+    image: 's2_4.png',
+    difficulty: 'متقدم',
     isPremium: true,
-    coverColor: Colors.black54,
   ),
-  const Song(
-    title: "Blinding Lights",
-    artist: "The Weeknd",
-    category: "Synth-pop",
-    isPremium: false,
-    coverColor: Colors.redAccent,
+  Song(
+    id: 'tamally',
+    title: 'تملي معاك',
+    artist: 'عمرو دياب',
+    category: 'بوب',
+    image: 's2_1.png',
+    difficulty: 'متوسط',
   ),
-  
-  // Beginners
-  const Song(
-    title: "Happy Birthday",
-    artist: "Traditional",
-    category: "Folk",
-    isPremium: false,
-    coverColor: Colors.green,
+  Song(
+    id: 'nassam',
+    title: 'نسم علينا الهوى',
+    artist: 'فيروز',
+    category: 'طرب',
+    image: 's1_5.png',
   ),
-  const Song(
-    title: "Ya Rayah",
-    artist: "Rachid Taha",
-    category: "Folk",
+  Song(
+    id: 'kadim',
+    title: 'زيديني عشقاً',
+    artist: 'كاظم الساهر',
+    category: 'طرب',
+    image: 's2_0.png',
+    difficulty: 'متقدم',
+  ),
+  Song(
+    id: '3daqat',
+    title: '3 Daqat',
+    artist: 'Abu ft. Yousra',
+    category: 'بوب',
+    image: 's1_3.png',
+  ),
+  Song(
+    id: 'cest',
+    title: "C’est La Vie",
+    artist: 'Cheb Khaled',
+    category: 'راي',
+    image: 's1_7.png',
     isPremium: true,
-    coverColor: Colors.deepOrange,
+  ),
+  Song(
+    id: 'shape',
+    title: 'Shape of You',
+    artist: 'Ed Sheeran',
+    category: 'بوب',
+    image: 's2_2.png',
+    isPremium: true,
+  ),
+  Song(
+    id: 'nothing',
+    title: 'Nothing Else Matters',
+    artist: 'Metallica',
+    category: 'روك',
+    image: 's1_6.png',
+    difficulty: 'متوسط',
+    isPremium: true,
+  ),
+  Song(
+    id: 'blinding',
+    title: 'Blinding Lights',
+    artist: 'The Weeknd',
+    category: 'بوب',
+    image: 's1_3.png',
+    difficulty: 'متوسط',
+  ),
+  Song(
+    id: 'birthday',
+    title: 'Happy Birthday',
+    artist: 'Traditional',
+    category: 'كلاسيكي',
+    image: 's2_7.png',
+  ),
+  Song(
+    id: 'rayah',
+    title: 'Ya Rayah',
+    artist: 'Rachid Taha',
+    category: 'راي',
+    image: 's1_5.png',
+    isPremium: true,
+  ),
+  Song(
+    id: 'clapton',
+    title: 'Wonderful Tonight',
+    artist: 'إريك كلابتون',
+    category: 'روك',
+    image: 's2_3.png',
   ),
 ];

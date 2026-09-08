@@ -1,0 +1,53 @@
+name: Flutter review build
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format lib test
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - run: flutter test --dart-define=CAPTURE_PREVIEWS=true --update-goldens test/design_preview_test.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: design-previews
+          path: test/previews
+      - run: flutter build web --release --base-href /YALLA-PLAY/ --no-web-resources-cdn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yalla-guitar-web
+          path: build/web
+      - name: Include the reviewed web build on the design branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/codex/yalla-guitar-stitch-design'
+        run: |
+          cp -R build/web/. .
+          touch .nojekyll
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib test/widget_test.dart test/design_preview_test.dart pubspec.lock
+          git add index.html main.dart.js flutter.js flutter_bootstrap.js flutter_service_worker.js version.json manifest.json favicon.png icons canvaskit assets .nojekyll
+          if ! git diff --cached --quiet; then
+            git commit -m 'Build and format reviewed Yalla Guitar web preview [skip ci]'
+            git push
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: formatted-source
+          path: |
+            lib
+            test
+            pubspec.lock

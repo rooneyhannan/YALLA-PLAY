@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import 'main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -27,7 +29,7 @@ class _SplashScreenState extends State<SplashScreen> {
     return const Scaffold(
       body: Center(
         child: Text(
-          'YALLA PLAY',
+          'Yalla Guitar',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -39,7 +41,3 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 }
-
-
-
-

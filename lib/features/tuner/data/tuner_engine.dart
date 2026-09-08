@@ -1,10 +1,10 @@
+// ignore_for_file: avoid_print
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:web_audio' as wa;
+import 'dart:js_interop';
+
+import 'package:web/web.dart' as web;
 
 /// Minimal web tuner engine.
 ///
@@ -13,9 +13,9 @@ import 'dart:web_audio' as wa;
 /// YIN pitch detection on the time-domain buffer.  No streams, no
 /// ScriptProcessorNode, no external packages.
 class TunerEngine {
-  wa.AudioContext? _ctx;
-  wa.AnalyserNode? _analyser;
-  html.MediaStream? _stream;
+  web.AudioContext? _ctx;
+  web.AnalyserNode? _analyser;
+  web.MediaStream? _stream;
   Timer? _timer;
 
   bool _running = false;
@@ -31,22 +31,24 @@ class TunerEngine {
     print('[TunerEngine] start()');
 
     // 1. Mic access
-    final md = html.window.navigator.mediaDevices;
-    if (md == null) {
-      print('[TunerEngine] ERROR: mediaDevices is null (need HTTPS)');
-      return;
-    }
-    _stream = await md.getUserMedia({'audio': true});
-    print('[TunerEngine] getUserMedia OK — '
-        '${_stream!.getAudioTracks().length} track(s)');
+    final md = web.window.navigator.mediaDevices;
+    _stream = await md
+        .getUserMedia(web.MediaStreamConstraints(audio: true.toJS))
+        .toDart;
+    print(
+      '[TunerEngine] getUserMedia OK — '
+      '${_stream!.getAudioTracks().toDart.length} track(s)',
+    );
 
     // 2. Audio graph: mic → source → analyser → gain(0) → dest
-    _ctx = wa.AudioContext();
-    print('[TunerEngine] AudioContext sampleRate=${_ctx!.sampleRate}, '
-        'state=${_ctx!.state}');
+    _ctx = web.AudioContext();
+    print(
+      '[TunerEngine] AudioContext sampleRate=${_ctx!.sampleRate}, '
+      'state=${_ctx!.state}',
+    );
 
     if (_ctx!.state != 'running') {
-      await _ctx!.resume();
+      await _ctx!.resume().toDart;
       print('[TunerEngine] resume() → state=${_ctx!.state}');
     }
 
@@ -55,16 +57,16 @@ class TunerEngine {
     _analyser!.fftSize = _fftSize;
 
     final gain = _ctx!.createGain();
-    gain.gain!.value = 0; // mute playback
+    gain.gain.value = 0; // mute playback
 
-    source.connectNode(_analyser!);
-    _analyser!.connectNode(gain);
-    gain.connectNode(_ctx!.destination!);
+    source.connect(_analyser!);
+    _analyser!.connect(gain);
+    gain.connect(_ctx!.destination);
     print('[TunerEngine] graph: source → analyser → gain(0) → dest');
 
     // 3. Poll with a timer
-    final sampleRate = _ctx!.sampleRate!.toInt();
-    final buf = Uint8List(_analyser!.frequencyBinCount!);
+    final sampleRate = _ctx!.sampleRate.toInt();
+    final buf = Uint8List(_analyser!.frequencyBinCount);
     _running = true;
     int tick = 0;
 
@@ -73,7 +75,7 @@ class TunerEngine {
       tick++;
 
       try {
-        _analyser!.getByteTimeDomainData(buf);
+        _analyser!.getByteTimeDomainData(buf.toJS);
 
         // Convert 0..255 → -1..1  and compute RMS
         final n = buf.length;
@@ -107,11 +109,13 @@ class TunerEngine {
           print('[TunerEngine] pitch=${hz.toStringAsFixed(1)} Hz  note=$note');
         }
 
-        onResult(TunerResult(
-          frequency: (hz != null && hz > 20 && hz < 2000) ? hz : null,
-          rms: rms,
-          note: note,
-        ));
+        onResult(
+          TunerResult(
+            frequency: (hz != null && hz > 20 && hz < 2000) ? hz : null,
+            rms: rms,
+            note: note,
+          ),
+        );
       } catch (e) {
         print('[TunerEngine] poll error: $e');
       }
@@ -127,7 +131,7 @@ class TunerEngine {
     _timer = null;
     _analyser?.disconnect();
     _analyser = null;
-    _stream?.getTracks().forEach((t) => t.stop());
+    _stream?.getTracks().toDart.forEach((t) => t.stop());
     _stream = null;
     if (_ctx != null && _ctx!.state != 'closed') {
       _ctx!.close();
@@ -198,8 +202,18 @@ class TunerEngine {
   // -----------------------------------------------------------------------
 
   static const _noteNames = [
-    'C', 'C#', 'D', 'D#', 'E', 'F',
-    'F#', 'G', 'G#', 'A', 'A#', 'B',
+    'C',
+    'C#',
+    'D',
+    'D#',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'G#',
+    'A',
+    'A#',
+    'B',
   ];
 
   String _hzToNote(double hz) {
@@ -214,5 +228,9 @@ class TunerResult {
   final double? frequency;
   final double rms;
   final String note;
-  const TunerResult({required this.frequency, required this.rms, required this.note});
+  const TunerResult({
+    required this.frequency,
+    required this.rms,
+    required this.note,
+  });
 }
