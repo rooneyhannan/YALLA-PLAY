@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 
 class Note {
   final int s; // string (1-6)

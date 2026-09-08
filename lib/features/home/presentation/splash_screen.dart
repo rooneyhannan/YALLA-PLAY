@@ -27,7 +27,7 @@ class _SplashScreenState extends State<SplashScreen> {
     return const Scaffold(
       body: Center(
         child: Text(
-          'YALLA PLAY',
+          'Yalla Guitar',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
