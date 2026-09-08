@@ -33,7 +33,7 @@ class _TunerScreenState extends State<TunerScreen> {
                         minimumSize: const Size(48, 48),
                       ),
                       icon: const Icon(
-                        Icons.arrow_forward_ios_rounded,
+                        Icons.arrow_back_ios_new_rounded,
                         color: Colors.white,
                         size: 24,
                       ),

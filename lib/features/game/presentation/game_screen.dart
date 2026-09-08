@@ -114,7 +114,7 @@ class _GameScreenState extends State<GameScreen>
                   key: const ValueKey('game-back'),
                   tooltip: 'العودة للأغاني',
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_forward_rounded),
+                  icon: const Icon(Icons.arrow_back_rounded),
                 ),
                 const SizedBox(width: 8),
                 Expanded(

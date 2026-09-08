@@ -8,4 +8,7 @@ Future<void> loadDesignFonts() async {
     );
   }
   await loader.load();
+  final icons = FontLoader('MaterialIcons')
+    ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+  await icons.load();
 }

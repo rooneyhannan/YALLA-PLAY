@@ -63,6 +63,27 @@ void main() {
           find.byType(MainScreen),
           matchesGoldenFile('previews/${device.$1}-$tab.png'),
         );
+        if (device.$1 == 'mobile' && (tab == 0 || tab == 2)) {
+          final scroll = find.byKey(
+            PageStorageKey(tab == 0 ? 'dashboard' : 'songs'),
+          );
+          await tester.drag(scroll, const Offset(0, -620));
+          await tester.pumpAndSettle();
+          await expectLater(
+            find.byType(MainScreen),
+            matchesGoldenFile('previews/mobile-$tab-details.png'),
+          );
+          if (tab == 2) {
+            await tester.drag(scroll, const Offset(0, -620));
+            await tester.pumpAndSettle();
+            await expectLater(
+              find.byType(MainScreen),
+              matchesGoldenFile('previews/mobile-$tab-artists.png'),
+            );
+          }
+          await tester.drag(scroll, const Offset(0, 2500));
+          await tester.pumpAndSettle();
+        }
       }
       await tester.tap(find.byKey(const ValueKey('nav-0')));
       await tester.pumpAndSettle();

@@ -70,8 +70,8 @@ class DashboardScreen extends StatelessWidget {
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(24),
       gradient: const LinearGradient(
-        begin: Alignment.topRight,
-        end: Alignment.bottomLeft,
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
         colors: [Color(0xFF8A2BE2), Color(0xFF4B0082)],
       ),
       boxShadow: [
@@ -241,108 +241,134 @@ class DashboardScreen extends StatelessWidget {
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: onLearn,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
               children: [
-                const Expanded(
-                  child: Text(
-                    'دورات الأغاني',
-                    style: TextStyle(fontSize: 25, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 9,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00BFFF),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'NEW',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const Text(
-              'تعلم خطوة بخطوة',
-              style: TextStyle(color: AppTheme.cream),
-            ),
-            const SizedBox(height: 18),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: const DesignImage('s1_6.png'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: const DesignImage('s1_7.png'),
-                          ),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'دورات الأغاني',
+                        style: TextStyle(
+                          fontSize: 25,
+                          fontWeight: FontWeight.w700,
                         ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF301F1F),
-                              borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00BFFF),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'NEW',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'تعلم خطوة بخطوة',
+                  style: TextStyle(color: AppTheme.cream),
+                ),
+                const SizedBox(height: 18),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: const DesignImage('s1_6.png'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: const DesignImage('s1_7.png'),
+                              ),
                             ),
-                            child: const Center(
-                              child: Text(
-                                'Franz\nFerdinand',
-                                textAlign: TextAlign.center,
-                                textDirection: TextDirection.ltr,
-                                style: TextStyle(
-                                  color: Color(0xFFFF664D),
-                                  fontSize: 22,
-                                  fontStyle: FontStyle.italic,
-                                  fontWeight: FontWeight.w800,
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF301F1F),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'Franz\nFerdinand',
+                                    textAlign: TextAlign.center,
+                                    textDirection: TextDirection.ltr,
+                                    style: TextStyle(
+                                      color: Color(0xFFFF664D),
+                                      fontSize: 22,
+                                      fontStyle: FontStyle.italic,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'عرض الكل',
-                  style: TextStyle(
-                    color: AppTheme.cream,
-                    fontWeight: FontWeight.w700,
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_back, color: AppTheme.cream, size: 20),
+                const SizedBox(height: 12),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'عرض الكل',
+                      style: TextStyle(
+                        color: AppTheme.cream,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Icon(Icons.arrow_back, color: AppTheme.cream, size: 20),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          Positioned(
+            right: 6,
+            top: 125,
+            child: Column(
+              children: [
+                for (var i = 0; i < 5; i++)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(bottom: 6),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: i == 0 ? Colors.white : Colors.white30,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     ),
   );
