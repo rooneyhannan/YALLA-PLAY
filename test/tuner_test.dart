@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'test_fonts.dart';
 
@@ -28,10 +30,15 @@ class FakeTunerEngine implements TunerEngine {
   }
 }
 
-/// A plucked string: the fundamental plus decaying overtones.
-List<double> pluck(double hz, int sampleRate, {int length = 4096}) => [
+/// A plucked string: the fundamental plus overtones.
+List<double> pluck(
+  double hz,
+  int sampleRate, {
+  int length = 4096,
+  List<double> harmonics = const [1.0, .6, .35, .2],
+}) => [
   for (var i = 0; i < length; i++)
-    [1.0, .6, .35, .2].asMap().entries.fold<double>(
+    harmonics.asMap().entries.fold<double>(
       0,
       (sum, h) =>
           sum +
@@ -57,6 +64,27 @@ void main() {
       expect(readTuning(82.41, target: 4).cents, closeTo(-500, 1));
     });
 
+    test('automatic mode names the string even an octave off', () {
+      final g = readTuning(392.4);
+      expect(g.stringIndex, 2);
+      expect(g.cents, closeTo(1.77, .01));
+      expect(g.frequency, closeTo(196.2, .01));
+      expect(readTuning(220).stringIndex, 4);
+      expect(readTuning(587.3).stringIndex, 3);
+      expect(readTuning(160).stringIndex, 5);
+    });
+
+    test('level gate drops a string fading far below its pluck', () {
+      final gate = LevelGate();
+      expect(gate.open(.001), isFalse);
+      expect(gate.open(.2), isTrue);
+      expect(gate.open(.01), isFalse);
+      for (var i = 0; i < 200; i++) {
+        gate.open(0);
+      }
+      expect(gate.open(.01), isTrue);
+    });
+
     test('smoother ignores single outliers and restarts on a new note', () {
       final smoother = PitchSmoother();
       for (final hz in [110.0, 110.2, 110.1]) {
@@ -80,6 +108,61 @@ void main() {
             reason: '${string.note}: $hz',
           );
         }
+      });
+    }
+
+    test('YIN finds the fundamental under a stronger overtone', () {
+      for (final string in standardTuning) {
+        for (final harmonics in [
+          [.15, 1.0, .5, .3],
+          [.2, .5, 1.0, .3],
+        ]) {
+          final hz = detectPitch(
+            pluck(string.frequency, 48000, harmonics: harmonics),
+            48000,
+          );
+          expect(
+            centsBetween(hz!, string.frequency).abs(),
+            lessThan(2),
+            reason: '${string.note} $harmonics: $hz',
+          );
+        }
+      }
+    });
+
+    for (final (file, string) in [('acoustic_E2', 5), ('nylon_G3', 2)]) {
+      test('recorded $file: every heard frame names the right string', () {
+        // Canonical 16-bit mono WAV written by the fixture script.
+        final bytes = ByteData.sublistView(
+          File('test/fixtures/$file.wav').readAsBytesSync(),
+        );
+        const sampleRate = 44100, hop = sampleRate ~/ 20, header = 44;
+        final samples = [
+          for (var i = header; i + 1 < bytes.lengthInBytes; i += 2)
+            bytes.getInt16(i, Endian.little) / 32768,
+        ];
+        final gate = LevelGate();
+        final heard = <TuningReading>[];
+        for (var end = 4096; end <= samples.length; end += hop) {
+          final frame = samples.sublist(end - 4096, end);
+          final rms = math.sqrt(
+            frame.fold(0.0, (sum, v) => sum + v * v) / frame.length,
+          );
+          if (!gate.open(rms)) continue;
+          final hz = detectPitch(frame, sampleRate);
+          if (hz != null) heard.add(readTuning(hz));
+        }
+        expect(heard.length, greaterThan(25));
+        expect(heard.where((r) => r.stringIndex != string), isEmpty);
+        final wrongOctave = heard.where(
+          (r) =>
+              centsBetween(
+                r.frequency,
+                standardTuning[string].frequency,
+              ).abs() >
+              50,
+        );
+        expect(wrongOctave, isEmpty);
       });
     }
 

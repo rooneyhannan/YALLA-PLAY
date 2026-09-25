@@ -109,7 +109,8 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
         return;
       }
       _silentReadings = 0;
-      final reading = readTuning(_smoother.add(frequency), target: _target);
+      final heard = readTuning(frequency, target: _target).frequency;
+      final reading = readTuning(_smoother.add(heard), target: _target);
       _reading = reading;
       _inTuneReadings = reading.inTune ? _inTuneReadings + 1 : 0;
       if (_inTuneReadings >= _readingsUntilTuned) {
