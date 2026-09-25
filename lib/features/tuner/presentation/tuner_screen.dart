@@ -2,157 +2,411 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/design_widgets.dart';
+import '../data/tuner_engine.dart';
+import '../data/tuning.dart';
+
+enum _Status { idle, starting, listening }
 
 class TunerScreen extends StatefulWidget {
   final VoidCallback onBack;
-  const TunerScreen({super.key, required this.onBack});
+
+  /// False while another tab is shown; the microphone is released then.
+  final bool active;
+  final TunerEngine Function() engineFactory;
+  const TunerScreen({
+    super.key,
+    required this.onBack,
+    this.active = true,
+    this.engineFactory = createTunerEngine,
+  });
   @override
   State<TunerScreen> createState() => _TunerScreenState();
 }
 
-class _TunerScreenState extends State<TunerScreen> {
-  int? _string;
+class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
+  static const _green = Color(0xFF3CD98A);
+  // The engine reports about 20 times a second.
+  static const _readingsUntilTuned = 10, _silentReadingsUntilClear = 12;
+
+  late final TunerEngine _engine = widget.engineFactory();
+  final _smoother = PitchSmoother();
+  final Set<int> _tuned = {};
+  _Status _status = _Status.idle;
+  TunerError? _error;
+  int? _target;
+  TuningReading? _reading;
+  double _level = 0;
+  int _silentReadings = 0, _inTuneReadings = 0;
+
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: const Color(0xFF1A1A1B),
-    child: LayoutBuilder(
-      builder: (context, c) => SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: c.maxHeight),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton.filled(
-                      tooltip: 'العودة للرئيسية',
-                      onPressed: widget.onBack,
-                      style: IconButton.styleFrom(
-                        backgroundColor: Colors.white10,
-                        minimumSize: const Size(48, 48),
-                      ),
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                      onPressed: () => setState(() => _string = null),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white12),
-                        backgroundColor: Colors.white.withValues(alpha: .04),
-                      ),
-                      icon: Icon(
-                        Icons.circle,
-                        size: 10,
-                        color: _string == null
-                            ? const Color(0xFF3CD98A)
-                            : AppTheme.cream,
-                      ),
-                      label: Text(
-                        _string == null ? 'تلقائي' : 'يدوي',
-                        style: const TextStyle(color: Color(0xFF3CD98A)),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: (c.maxHeight * .13).clamp(28, 100).toDouble()),
-                Text(
-                  _string == null
-                      ? '—'
-                      : const ['E', 'H', 'G', 'D', 'A', 'E'][_string!],
-                  textDirection: TextDirection.ltr,
-                  style: TextStyle(
-                    fontSize: 46,
-                    fontWeight: FontWeight.w500,
-                    color: _string == null ? Colors.white24 : AppTheme.gold,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const SizedBox(
-                  width: 420,
-                  height: 84,
-                  child: CustomPaint(painter: _MeterPainter()),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'معاينة الدوزان — الاستماع غير مفعّل',
-                  style: TextStyle(fontSize: 12, color: AppTheme.cream),
-                ),
-                const SizedBox(height: 36),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 700),
-                  child: Column(
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(TunerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.active) _stop();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _engine.stop();
+    super.dispose();
+  }
+
+  Future<void> _start() async {
+    setState(() {
+      _status = _Status.starting;
+      _error = null;
+    });
+    try {
+      await _engine.start(_onPitch);
+      if (mounted && _status == _Status.starting) {
+        setState(() => _status = _Status.listening);
+      }
+    } on TunerException catch (e) {
+      if (mounted) {
+        setState(() {
+          _status = _Status.idle;
+          _error = e.error;
+        });
+      }
+    }
+  }
+
+  void _stop() {
+    if (_status == _Status.idle) return;
+    _engine.stop();
+    _smoother.reset();
+    if (!mounted) return;
+    // Called from didUpdateWidget, where a rebuild is already on its way.
+    _status = _Status.idle;
+    _reading = null;
+    _level = 0;
+  }
+
+  void _onPitch(double? frequency, double level) {
+    if (!mounted || _status != _Status.listening) return;
+    setState(() {
+      _level = level;
+      if (frequency == null) {
+        _inTuneReadings = 0;
+        if (++_silentReadings >= _silentReadingsUntilClear) {
+          _reading = null;
+          _smoother.reset();
+        }
+        return;
+      }
+      _silentReadings = 0;
+      final reading = readTuning(_smoother.add(frequency), target: _target);
+      _reading = reading;
+      _inTuneReadings = reading.inTune ? _inTuneReadings + 1 : 0;
+      if (_inTuneReadings >= _readingsUntilTuned) {
+        _tuned.add(reading.stringIndex);
+      }
+    });
+  }
+
+  void _select(int? target) => setState(() {
+    _target = target;
+    _inTuneReadings = 0;
+    _smoother.reset();
+    _reading = null;
+  });
+
+  String get _hint {
+    if (_error != null) {
+      return switch (_error!) {
+        TunerError.permissionDenied =>
+          'لم يُسمح باستخدام الميكروفون. فعّل الإذن من إعدادات المتصفح ثم حاول مجدداً.',
+        TunerError.noMicrophone => 'لم يتم العثور على ميكروفون.',
+        TunerError.unsupported =>
+          'هذا المتصفح لا يدعم الاستماع. افتح التطبيق في Chrome أو Safari.',
+        TunerError.failed => 'تعذّر تشغيل الميكروفون. حاول مرة أخرى.',
+      };
+    }
+    if (_status == _Status.idle) {
+      return 'اضغط «ابدأ الاستماع» واسمح باستخدام الميكروفون';
+    }
+    if (_status == _Status.starting) return 'جارٍ تشغيل الميكروفون…';
+    final reading = _reading;
+    if (reading == null) {
+      if (_tuned.length == standardTuning.length) {
+        return 'رائع! كل الأوتار مضبوطة';
+      }
+      return _target == null
+          ? 'اعزف على وتر واتركه يرن'
+          : 'اعزف على وتر ${standardTuning[_target!].label}';
+    }
+    if (reading.inTune) return 'الوتر مضبوط';
+    return reading.cents < 0
+        ? 'منخفض — شُدّ الوتر قليلاً'
+        : 'مرتفع — أرخِ الوتر قليلاً';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reading = _reading;
+    final shown = reading?.stringIndex ?? _target;
+    final inTune = reading?.inTune ?? false;
+    final listening = _status == _Status.listening;
+    return ColoredBox(
+      color: const Color(0xFF1A1A1B),
+      child: LayoutBuilder(
+        builder: (context, c) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: c.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      _pegs([0, 1, 2], ['E', 'H', 'G']),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        height: (c.maxWidth * .4).clamp(130, 270).toDouble(),
-                        width: double.infinity,
-                        child: const DesignImage(
-                          's4_0.png',
-                          fit: BoxFit.contain,
+                      IconButton.filled(
+                        tooltip: 'العودة للرئيسية',
+                        onPressed: widget.onBack,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white10,
+                          minimumSize: const Size(48, 48),
+                        ),
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 24,
                         ),
                       ),
-                      const SizedBox(height: 20),
-                      _pegs([3, 4, 5], ['D', 'A', 'E']),
+                      const Spacer(),
+                      Tooltip(
+                        message: 'تلقائي: يتعرف على الوتر الذي تعزفه',
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('tuner-mode'),
+                          onPressed: () => _select(null),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white12),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: .04,
+                            ),
+                          ),
+                          icon: Icon(
+                            Icons.circle,
+                            size: 10,
+                            color: _target == null ? _green : AppTheme.cream,
+                          ),
+                          label: Text(
+                            _target == null ? 'تلقائي' : 'يدوي',
+                            style: TextStyle(
+                              color: _target == null ? _green : AppTheme.cream,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'E · A · D · G · H · E',
-                  textDirection: TextDirection.ltr,
-                  style: TextStyle(color: Colors.white30, fontSize: 12),
-                ),
-              ],
+                  SizedBox(
+                    height: (c.maxHeight * .07).clamp(16, 60).toDouble(),
+                  ),
+                  Text(
+                    shown == null ? '—' : standardTuning[shown].label,
+                    key: const ValueKey('tuner-note'),
+                    textDirection: TextDirection.ltr,
+                    style: TextStyle(
+                      fontSize: 46,
+                      fontWeight: FontWeight.w500,
+                      color: shown == null
+                          ? Colors.white24
+                          : inTune
+                          ? _green
+                          : AppTheme.gold,
+                    ),
+                  ),
+                  SizedBox(
+                    height: 20,
+                    child: reading == null
+                        ? null
+                        : Text(
+                            '${reading.frequency.toStringAsFixed(1)} Hz · '
+                            '${reading.cents >= 0 ? '+' : ''}'
+                            '${reading.cents.round()} cent',
+                            key: const ValueKey('tuner-cents'),
+                            textDirection: TextDirection.ltr,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.cream,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: 420,
+                    height: 84,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: reading?.cents ?? 0),
+                      duration: const Duration(milliseconds: 150),
+                      builder: (context, cents, _) => CustomPaint(
+                        painter: _MeterPainter(
+                          cents: reading == null ? null : cents,
+                          color: inTune ? _green : AppTheme.gold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: 160,
+                    child: LinearProgressIndicator(
+                      value: listening ? (_level * 8).clamp(0, 1) : 0,
+                      minHeight: 3,
+                      borderRadius: BorderRadius.circular(2),
+                      backgroundColor: Colors.white10,
+                      color: _green.withValues(alpha: .7),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    _hint,
+                    key: const ValueKey('tuner-hint'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: _error != null
+                          ? const Color(0xFFFFB4A5)
+                          : inTune
+                          ? _green
+                          : AppTheme.cream,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  listening
+                      ? OutlinedButton.icon(
+                          key: const ValueKey('tuner-listen'),
+                          onPressed: () => setState(_stop),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.cream,
+                            side: const BorderSide(color: Colors.white24),
+                          ),
+                          icon: const Icon(Icons.mic_off_outlined),
+                          label: const Text('إيقاف الاستماع'),
+                        )
+                      : FilledButton.icon(
+                          key: const ValueKey('tuner-listen'),
+                          onPressed: _status == _Status.starting
+                              ? null
+                              : _start,
+                          icon: const Icon(Icons.mic_rounded),
+                          label: const Text('ابدأ الاستماع'),
+                        ),
+                  const SizedBox(height: 28),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 700),
+                    child: Column(
+                      children: [
+                        _pegs([0, 1, 2], shown),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          height: (c.maxWidth * .4).clamp(130, 270).toDouble(),
+                          width: double.infinity,
+                          child: const DesignImage(
+                            's4_0.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _pegs([3, 4, 5], shown),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'E · A · D · G · H · E',
+                    textDirection: TextDirection.ltr,
+                    style: TextStyle(color: Colors.white30, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _pegs(List<int> indexes, List<String> labels) => Row(
+  Widget _pegs(List<int> indexes, int? shown) => Row(
     textDirection: TextDirection.ltr,
     mainAxisAlignment: MainAxisAlignment.spaceAround,
-    children: List.generate(
-      3,
-      (i) => OutlinedButton(
-        key: ValueKey('tuner-string-${indexes[i]}'),
-        onPressed: () => setState(() => _string = indexes[i]),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: _string == indexes[i]
-              ? AppTheme.gold
-              : AppTheme.text,
-          backgroundColor: _string == indexes[i]
-              ? AppTheme.gold.withValues(alpha: .08)
-              : Colors.transparent,
-          side: BorderSide(
-            color: _string == indexes[i] ? AppTheme.gold : Colors.white38,
+    children: [
+      for (final i in indexes)
+        OutlinedButton(
+          key: ValueKey('tuner-string-$i'),
+          onPressed: () => _select(i),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: shown == i
+                ? AppTheme.gold
+                : _tuned.contains(i)
+                ? _green
+                : AppTheme.text,
+            backgroundColor: _target == i
+                ? AppTheme.gold.withValues(alpha: .08)
+                : Colors.transparent,
+            side: BorderSide(
+              color: shown == i
+                  ? AppTheme.gold
+                  : _tuned.contains(i)
+                  ? _green
+                  : Colors.white38,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            minimumSize: const Size(56, 48),
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                standardTuning[i].label,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (_tuned.contains(i)) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.check_rounded,
+                  key: ValueKey('tuner-tuned-$i'),
+                  size: 16,
+                  color: _green,
+                ),
+              ],
+            ],
           ),
-          minimumSize: const Size(56, 48),
         ),
-        child: Text(
-          labels[i],
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-        ),
-      ),
-    ),
+    ],
   );
 }
 
 class _MeterPainter extends CustomPainter {
-  const _MeterPainter();
+  /// Needle position; null hides the needle.
+  final double? cents;
+  final Color color;
+  const _MeterPainter({required this.cents, required this.color});
+
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
+    final reach = cx - 38;
     final p = Paint()
       ..color = const Color(0xFF4B4B4B)
       ..strokeWidth = 2;
@@ -163,9 +417,14 @@ class _MeterPainter extends CustomPainter {
       canvas.drawLine(Offset(cx - x, 68 - height), Offset(cx - x, 68), p);
       canvas.drawLine(Offset(cx + x, 68 - height), Offset(cx + x, 68), p);
     }
+    // The in-tune zone, ±5 cents of the full ±50 cent scale.
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(cx, 36), width: 48, height: 64),
+        Rect.fromCenter(
+          center: Offset(cx, 36),
+          width: (reach * inTuneCents / 50 * 2).clamp(48, reach).toDouble(),
+          height: 64,
+        ),
         const Radius.circular(6),
       ),
       Paint()..color = Colors.white10,
@@ -174,11 +433,24 @@ class _MeterPainter extends CustomPainter {
       Offset(cx, 4),
       Offset(cx, 68),
       Paint()
-        ..color = Colors.white
-        ..strokeWidth = 2,
+        ..color = Colors.white24
+        ..strokeWidth = 1,
     );
+    if (cents == null) return;
+    // LTR on purpose: flat on the left, sharp on the right, as on any tuner.
+    final x = cx + (cents!.clamp(-50, 50) / 50) * reach;
+    canvas.drawLine(
+      Offset(x, 0),
+      Offset(x, 72),
+      Paint()
+        ..color = color
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawCircle(Offset(x, 76), 4, Paint()..color = color);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(_MeterPainter oldDelegate) =>
+      oldDelegate.cents != cents || oldDelegate.color != color;
 }

@@ -9,7 +9,8 @@ Arabic guitar-learning Flutter prototype based on the four supplied Stitch desig
 - Search and session favorites; every song opens the six-string guitar preview.
 - Pause, restart, playback speed, and frame-independent note animation.
 - The original Ba’dak Ala Bali note chart is retained. Other songs explicitly use a demo chart.
-- Microphone detection and scoring are not connected. The tuner is a visual/manual selection preview.
+- The tuner listens to the microphone in the web build (YIN pitch detection): automatic string detection or a chosen string, a cents needle, tighten/loosen hints, and a check mark once a string holds in tune. Other platforms show that listening is unsupported.
+- Scoring while playing songs is not connected yet.
 - Course progress, points, premium labels, and trial banners are design examples. No purchases or accounts are created.
 
 ## Run

@@ -93,7 +93,10 @@ class _MainScreenState extends State<MainScreen> {
           onFavorite: _toggleFavorite,
           recent: _recent,
         ),
-        TunerScreen(onBack: () => setState(() => _selected = 0)),
+        TunerScreen(
+          active: _selected == 3,
+          onBack: () => setState(() => _selected = 0),
+        ),
       ];
       return Scaffold(
         body: SafeArea(
