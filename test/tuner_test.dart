@@ -177,8 +177,9 @@ void main() {
     Future<FakeTunerEngine> pumpTuner(
       WidgetTester tester, {
       bool active = true,
+      Size size = const Size(390, 1200),
     }) async {
-      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -262,6 +263,37 @@ void main() {
       await hear(tester, engine, 110);
       expect(note(tester), 'A');
     });
+
+    for (final size in [
+      const Size(320, 480),
+      const Size(375, 560),
+      const Size(390, 700),
+      const Size(1440, 800),
+    ]) {
+      testWidgets('fits on one screen without scrolling at $size', (
+        tester,
+      ) async {
+        await pumpTuner(tester, size: size);
+        expect(tester.takeException(), isNull);
+        expect(find.byType(Scrollable), findsNothing);
+        final screen = Offset.zero & size;
+        for (final key in [
+          'tuner-mode',
+          'tuner-note',
+          'tuner-hint',
+          'tuner-listen',
+          'tuner-string-0',
+          'tuner-string-5',
+        ]) {
+          final box = tester.getRect(find.byKey(ValueKey(key)));
+          expect(
+            screen.contains(box.topLeft) && screen.contains(box.bottomRight),
+            isTrue,
+            reason: '$key at $box',
+          );
+        }
+      });
+    }
 
     testWidgets('explains a denied microphone', (tester) async {
       final engine = await pumpTuner(tester);
