@@ -20,7 +20,6 @@ class WebTunerEngine implements TunerEngine {
 
   static const _pollInterval = Duration(milliseconds: 50);
   static const _fftSize = 4096;
-  static const _silenceRms = 0.006;
 
   @override
   Future<void> start(PitchCallback onPitch) async {
@@ -36,12 +35,13 @@ class WebTunerEngine implements TunerEngine {
       _stream = await web.window.navigator.mediaDevices
           .getUserMedia(
             web.MediaStreamConstraints(
-              // Voice processing filters out steady tones, which is exactly
-              // what a plucked string is.
+              // Noise suppression and echo cancellation filter out steady
+              // tones, which is exactly what a plucked string is. Automatic
+              // gain stays on so quiet thin strings still reach the detector.
               audio: web.MediaTrackConstraints(
                 echoCancellation: false.toJS,
                 noiseSuppression: false.toJS,
-                autoGainControl: false.toJS,
+                autoGainControl: true.toJS,
               ),
             ),
           )
@@ -57,6 +57,7 @@ class WebTunerEngine implements TunerEngine {
     ctx.createMediaStreamSource(_stream!).connect(analyser);
     final sampleRate = ctx.sampleRate;
     final samples = JSFloat32Array.withLength(_fftSize);
+    final gate = LevelGate();
 
     _timer = Timer.periodic(_pollInterval, (_) {
       analyser.getFloatTimeDomainData(samples);
@@ -66,7 +67,7 @@ class WebTunerEngine implements TunerEngine {
         sumSq += v * v;
       }
       final rms = math.sqrt(sumSq / buffer.length);
-      if (rms < _silenceRms) {
+      if (!gate.open(rms)) {
         onPitch(null, rms);
         return;
       }

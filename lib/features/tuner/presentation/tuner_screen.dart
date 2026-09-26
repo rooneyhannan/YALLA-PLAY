@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -27,6 +29,9 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
   static const _green = Color(0xFF3CD98A);
   // The engine reports about 20 times a second.
   static const _readingsUntilTuned = 10, _silentReadingsUntilClear = 12;
+
+  /// Height the page is laid out for at least; shorter screens scale it.
+  static const _minHeight = 680.0;
 
   late final TunerEngine _engine = widget.engineFactory();
   final _smoother = PitchSmoother();
@@ -109,7 +114,8 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
         return;
       }
       _silentReadings = 0;
-      final reading = readTuning(_smoother.add(frequency), target: _target);
+      final heard = readTuning(frequency, target: _target).frequency;
+      final reading = readTuning(_smoother.add(heard), target: _target);
       _reading = reading;
       _inTuneReadings = reading.inTune ? _inTuneReadings + 1 : 0;
       if (_inTuneReadings >= _readingsUntilTuned) {
@@ -164,11 +170,15 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
     return ColoredBox(
       color: const Color(0xFF1A1A1B),
       child: LayoutBuilder(
-        builder: (context, c) => SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: c.maxHeight),
+        builder: (context, c) {
+          // One fixed screen, never scrolled: spare height goes to the
+          // headstock photo, and shorter screens scale the whole page down.
+          final height = math.max(c.maxHeight, _minHeight);
+          final page = SizedBox(
+            width: c.maxWidth,
+            height: height,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
               child: Column(
                 children: [
                   Row(
@@ -213,9 +223,7 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
                       ),
                     ],
                   ),
-                  SizedBox(
-                    height: (c.maxHeight * .07).clamp(16, 60).toDouble(),
-                  ),
+                  const Spacer(),
                   Text(
                     shown == null ? '—' : standardTuning[shown].label,
                     key: const ValueKey('tuner-note'),
@@ -272,22 +280,29 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
                       color: _green.withValues(alpha: .7),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Text(
-                    _hint,
-                    key: const ValueKey('tuner-hint'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: _error != null
-                          ? const Color(0xFFFFB4A5)
-                          : inTune
-                          ? _green
-                          : AppTheme.cream,
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 44,
+                    child: Center(
+                      child: Text(
+                        _hint,
+                        key: const ValueKey('tuner-hint'),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: _error != null
+                              ? const Color(0xFFFFB4A5)
+                              : inTune
+                              ? _green
+                              : AppTheme.cream,
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   listening
                       ? OutlinedButton.icon(
                           key: const ValueKey('tuner-listen'),
@@ -307,27 +322,25 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
                           icon: const Icon(Icons.mic_rounded),
                           label: const Text('ابدأ الاستماع'),
                         ),
-                  const SizedBox(height: 28),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 700),
-                    child: Column(
-                      children: [
-                        _pegs([0, 1, 2], shown),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          height: (c.maxWidth * .4).clamp(130, 270).toDouble(),
-                          width: double.infinity,
-                          child: const DesignImage(
-                            's4_0.png',
-                            fit: BoxFit.contain,
+                  const SizedBox(height: 16),
+                  Expanded(
+                    flex: 4,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 700),
+                      child: Column(
+                        children: [
+                          _pegs([0, 1, 2], shown),
+                          const SizedBox(height: 12),
+                          const Expanded(
+                            child: DesignImage('s4_0.png', fit: BoxFit.contain),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        _pegs([3, 4, 5], shown),
-                      ],
+                          const SizedBox(height: 12),
+                          _pegs([3, 4, 5], shown),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   const Text(
                     'E · A · D · G · H · E',
                     textDirection: TextDirection.ltr,
@@ -336,8 +349,11 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
                 ],
               ),
             ),
-          ),
-        ),
+          );
+          return height == c.maxHeight
+              ? page
+              : Center(child: FittedBox(child: page));
+        },
       ),
     );
   }
