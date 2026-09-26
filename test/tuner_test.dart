@@ -295,6 +295,22 @@ void main() {
       });
     }
 
+    testWidgets('headstock keys sit where the strings are on a guitar', (
+      tester,
+    ) async {
+      await pumpTuner(tester);
+      Offset key(int i) =>
+          tester.getCenter(find.byKey(ValueKey('tuner-string-$i')));
+      // Top row G-H-E left to right, bottom row D-A-E.
+      expect(key(2).dx, lessThan(key(1).dx));
+      expect(key(1).dx, lessThan(key(0).dx));
+      expect(key(3).dx, lessThan(key(4).dx));
+      expect(key(4).dx, lessThan(key(5).dx));
+      expect(key(0).dy, lessThan(key(5).dy));
+      expect(key(2).dy, closeTo(key(0).dy, .01));
+      expect(find.text('G'), findsOneWidget);
+    });
+
     testWidgets('explains a denied microphone', (tester) async {
       final engine = await pumpTuner(tester);
       engine.failWith = const TunerException(TunerError.permissionDenied);

@@ -27,8 +27,10 @@ flutter run -d chrome
 ```sh
 flutter analyze --no-fatal-infos
 flutter test
-flutter build web --release --base-href /YALLA-PLAY/ --no-web-resources-cdn
+tool/build_web.sh
 ```
+
+`tool/build_web.sh --publish` also copies the build to the repository root, which GitHub Pages serves. It stamps the build (shown in the tuner footer and the profile sheet) and versions the loaded scripts, so a reload shows a new release right away instead of a cached one.
 
 GitHub Actions runs analysis, behavior tests, and a web build without requiring a local Flutter installation. It also exports mobile and desktop design previews as workflow artifacts. On the design branch, the successful workflow commits the web output back to the branch so merging the reviewed PR updates the existing GitHub Pages site (configured for `main` / root).
 

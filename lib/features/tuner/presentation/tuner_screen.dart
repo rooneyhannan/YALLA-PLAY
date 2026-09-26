@@ -2,10 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/app_build.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/widgets/design_widgets.dart';
 import '../data/tuner_engine.dart';
 import '../data/tuning.dart';
+import 'headstock.dart';
 
 enum _Status { idle, starting, listening }
 
@@ -27,6 +28,7 @@ class TunerScreen extends StatefulWidget {
 
 class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
   static const _green = Color(0xFF3CD98A);
+  static const _background = Color(0xFF1A1A1B);
   // The engine reports about 20 times a second.
   static const _readingsUntilTuned = 10, _silentReadingsUntilClear = 12;
 
@@ -168,14 +170,16 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
     final inTune = reading?.inTune ?? false;
     final listening = _status == _Status.listening;
     return ColoredBox(
-      color: const Color(0xFF1A1A1B),
+      color: _background,
       child: LayoutBuilder(
         builder: (context, c) {
           // One fixed screen, never scrolled: spare height goes to the
           // headstock photo, and shorter screens scale the whole page down.
           final height = math.max(c.maxHeight, _minHeight);
           final page = SizedBox(
-            width: c.maxWidth,
+            // Widened by the same factor it is scaled down, so the scaled
+            // page still spans the full width.
+            width: c.maxWidth * height / c.maxHeight,
             height: height,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
@@ -223,7 +227,7 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
                       ),
                     ],
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 4),
                   Text(
                     shown == null ? '—' : standardTuning[shown].label,
                     key: const ValueKey('tuner-note'),
@@ -324,25 +328,23 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
                         ),
                   const SizedBox(height: 16),
                   Expanded(
-                    flex: 4,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 700),
-                      child: Column(
-                        children: [
-                          _pegs([0, 1, 2], shown),
-                          const SizedBox(height: 12),
-                          const Expanded(
-                            child: DesignImage('s4_0.png', fit: BoxFit.contain),
-                          ),
-                          const SizedBox(height: 12),
-                          _pegs([3, 4, 5], shown),
-                        ],
+                      constraints: const BoxConstraints(maxWidth: 820),
+                      child: Headstock(
+                        background: _background,
+                        highlighted: shown,
+                        inTune: inTune,
+                        pulsing: listening && widget.active,
+                        // A copy, so the painter notices newly tuned strings.
+                        tuned: {..._tuned},
+                        onSelect: _select,
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'E · A · D · G · H · E',
+                    'E · A · D · G · H · E   ·   v$appBuild',
+                    key: ValueKey('tuner-footer'),
                     textDirection: TextDirection.ltr,
                     style: TextStyle(color: Colors.white30, fontSize: 12),
                   ),
@@ -350,67 +352,11 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
               ),
             ),
           );
-          return height == c.maxHeight
-              ? page
-              : Center(child: FittedBox(child: page));
+          return height == c.maxHeight ? page : FittedBox(child: page);
         },
       ),
     );
   }
-
-  Widget _pegs(List<int> indexes, int? shown) => Row(
-    textDirection: TextDirection.ltr,
-    mainAxisAlignment: MainAxisAlignment.spaceAround,
-    children: [
-      for (final i in indexes)
-        OutlinedButton(
-          key: ValueKey('tuner-string-$i'),
-          onPressed: () => _select(i),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: shown == i
-                ? AppTheme.gold
-                : _tuned.contains(i)
-                ? _green
-                : AppTheme.text,
-            backgroundColor: _target == i
-                ? AppTheme.gold.withValues(alpha: .08)
-                : Colors.transparent,
-            side: BorderSide(
-              color: shown == i
-                  ? AppTheme.gold
-                  : _tuned.contains(i)
-                  ? _green
-                  : Colors.white38,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            minimumSize: const Size(56, 48),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                standardTuning[i].label,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              if (_tuned.contains(i)) ...[
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.check_rounded,
-                  key: ValueKey('tuner-tuned-$i'),
-                  size: 16,
-                  color: _green,
-                ),
-              ],
-            ],
-          ),
-        ),
-    ],
-  );
 }
 
 class _MeterPainter extends CustomPainter {
