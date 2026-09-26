@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app_build.dart';
 import '../../../core/models/song.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/design_widgets.dart';
@@ -121,7 +122,7 @@ class _MainScreenState extends State<MainScreen> {
                           context,
                           title: 'ملفك الشخصي',
                           message:
-                              'ملفك الشخصي والإنجازات ستتوفر قريباً. استكشف الأغاني وابدأ العزف الآن.',
+                              'ملفك الشخصي والإنجازات ستتوفر قريباً. استكشف الأغاني وابدأ العزف الآن.\n\nالإصدار $appBuild',
                         ),
                         borderRadius: BorderRadius.circular(24),
                         child: SizedBox(

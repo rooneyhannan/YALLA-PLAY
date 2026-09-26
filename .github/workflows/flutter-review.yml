@@ -25,7 +25,7 @@ jobs:
         with:
           name: design-previews
           path: test/previews
-      - run: flutter build web --release --base-href /YALLA-PLAY/ --no-web-resources-cdn
+      - run: bash tool/build_web.sh
       - uses: actions/upload-artifact@v4
         with:
           name: yalla-guitar-web

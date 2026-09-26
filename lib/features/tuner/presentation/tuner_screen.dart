@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/app_build.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/design_widgets.dart';
 import '../data/tuner_engine.dart';
@@ -342,7 +343,8 @@ class _TunerScreenState extends State<TunerScreen> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'E · A · D · G · H · E',
+                    'E · A · D · G · H · E   ·   v$appBuild',
+                    key: ValueKey('tuner-footer'),
                     textDirection: TextDirection.ltr,
                     style: TextStyle(color: Colors.white30, fontSize: 12),
                   ),
