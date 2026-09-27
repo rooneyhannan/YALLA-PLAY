@@ -173,3 +173,39 @@ int? _localMinimumNear(Float64List cmndf, int lag, int maxLag) {
   }
   return best;
 }
+
+/// How clearly [frequency] sounds in [buffer], from about -1 to 1, or -1
+/// when a neighboring pitch sounds instead. Unlike [detectPitch], this
+/// asks whether one expected note is there, so it still answers while
+/// other strings ring along.
+///
+/// Uses McLeod's normalized square difference around the note's period:
+/// the note counts only if the strongest repetition near it lies within
+/// [toleranceCents] of it, so a semitone off does not pass.
+double periodicityAt(
+  List<double> buffer,
+  num sampleRate,
+  double frequency, {
+  double toleranceCents = 40,
+}) {
+  final window = buffer.length ~/ 2;
+  final period = sampleRate / frequency;
+  // Search a semitone and a bit either side, to see which pitch peaks.
+  final from = (period * .92).floor(), to = (period * 1.08).ceil();
+  if (to >= window) return -1;
+  var best = -1.0, bestLag = from;
+  for (var lag = from; lag <= to; lag++) {
+    var cross = 0.0, energy = 0.0;
+    for (var i = 0; i < window; i++) {
+      cross += buffer[i] * buffer[i + lag];
+      energy += buffer[i] * buffer[i] + buffer[i + lag] * buffer[i + lag];
+    }
+    final value = energy > 0 ? 2 * cross / energy : 0.0;
+    if (value > best) {
+      best = value;
+      bestLag = lag;
+    }
+  }
+  final off = 1200 * math.log(period / bestLag) / math.ln2;
+  return off.abs() <= toleranceCents ? best : -1;
+}

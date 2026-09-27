@@ -22,7 +22,7 @@ class WebTunerEngine implements TunerEngine {
   static const _fftSize = 4096;
 
   @override
-  Future<void> start(PitchCallback onPitch) async {
+  Future<void> start(PitchCallback onPitch, {FrameCallback? onFrame}) async {
     stop();
     if (!web.window.navigator.has('mediaDevices')) {
       // Missing outside secure (https) pages and in some in-app browsers.
@@ -71,6 +71,7 @@ class WebTunerEngine implements TunerEngine {
         onPitch(null, rms);
         return;
       }
+      onFrame?.call(buffer, sampleRate);
       onPitch(detectPitch(buffer, sampleRate), rms);
     });
   }
