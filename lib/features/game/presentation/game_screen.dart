@@ -8,8 +8,10 @@ import '../../../core/theme/app_theme.dart';
 import '../../tuner/data/tuner_engine.dart';
 import '../../tuner/data/tuning.dart';
 import '../data/ball_path.dart';
+import '../data/fingering.dart';
 import '../data/note_judge.dart';
 import '../data/song_data.dart';
+import 'hand_painter.dart';
 import 'highway_painter.dart';
 
 export 'highway_painter.dart' show GameNote;
@@ -50,6 +52,10 @@ class _GameScreenState extends State<GameScreen>
   final _feedback = <FeedbackMark>[];
   double _seconds = 0, _currentTick = 0, _speed = 1, _countdown = 0;
   Duration _lastElapsed = Duration.zero;
+
+  /// Time since the last frame, so a pitch heard between two slow frames
+  /// is placed exactly in the song, not at the older frame.
+  final _sinceFrame = Stopwatch()..start();
   bool _started = false, _playing = false, _listening = false;
   GameMode _mode = GameMode.play;
   double _level = 0;
@@ -71,17 +77,25 @@ class _GameScreenState extends State<GameScreen>
 
   /// Song time for judging: stands still at a note practice waits at, so
   /// the waiting is counted in as lateness.
-  double get _clock => _currentTick + (_waited ?? 0) * _ticksPerSecond;
+  double get _clock =>
+      _currentTick +
+      ((_waited ?? 0) +
+              (_playing && !_finished
+                  ? math.min(.25, _sinceFrame.elapsedMicroseconds / 1e6)
+                  : 0)) *
+          _ticksPerSecond;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     var time = 0.0;
+    final fingers = assignFingers(rawSongData);
     _notes = [
-      for (final note in rawSongData)
+      for (var i = 0; i < rawSongData.length; i++)
         (() {
-          final result = GameNote(note, time);
+          final note = rawSongData[i];
+          final result = GameNote(note, time, finger: fingers[i]);
           time += note.d;
           return result;
         })(),
@@ -129,6 +143,7 @@ class _GameScreenState extends State<GameScreen>
         (elapsed - _lastElapsed).inMicroseconds /
         Duration.microsecondsPerSecond;
     _lastElapsed = elapsed;
+    _sinceFrame.reset();
     setState(() {
       _seconds += seconds;
       if (_countdown > 0) {
@@ -248,51 +263,155 @@ class _GameScreenState extends State<GameScreen>
     super.dispose();
   }
 
+  /// The note to finger now: the one practice waits at, else the one
+  /// sounding or next to reach the hit line. Once a note is judged, the
+  /// hand moves on to the next.
+  int? get _currentNote {
+    if (_practicing) return _judge.firstOpen;
+    for (var i = 0; i < _notes.length; i++) {
+      final n = _notes[i];
+      if (_listening && _judge.verdicts[i] != null) continue;
+      if (n.absoluteTime + _leadTicks + n.note.d > _currentTick) return i;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: _background,
     body: SafeArea(
       child: Directionality(
         textDirection: TextDirection.ltr,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Semantics(
-                label: 'ستة أوتار مع نغمات متحركة وكرة تقفز من نغمة إلى نغمة',
-                child: CustomPaint(
-                  key: const ValueKey('guitar-board'),
-                  painter: HighwayPainter(
-                    notes: _notes,
-                    ball: _ball,
-                    currentTick: _currentTick,
-                    leadTicks: _leadTicks,
-                    totalTicks: _end,
-                    seconds: _seconds,
-                    background: _background,
-                    verdicts: _listening ? _judge.verdicts : null,
-                    feedback: _feedback,
-                    waiting: _waited != null ? _judge.firstOpen : null,
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final portrait = box.maxHeight > box.maxWidth;
+            final board = ClipRect(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Semantics(
+                      label:
+                          'ستة أوتار مع نغمات متحركة وكرة تقفز من نغمة إلى نغمة',
+                      child: CustomPaint(
+                        key: const ValueKey('guitar-board'),
+                        painter: HighwayPainter(
+                          notes: _notes,
+                          ball: _ball,
+                          currentTick: _currentTick,
+                          leadTicks: _leadTicks,
+                          totalTicks: _end,
+                          seconds: _seconds,
+                          background: _background,
+                          verdicts: _listening ? _judge.verdicts : null,
+                          feedback: _feedback,
+                          waiting: _waited != null ? _judge.firstOpen : null,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  if (_waited != null && _playing)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 8,
+                      child: _waitingHint(),
+                    ),
+                ],
               ),
-            ),
-            Positioned(left: 0, right: 0, top: 0, child: _header()),
-            Positioned(left: 0, right: 0, bottom: 0, child: _controls()),
-            if (_waited != null && _playing)
-              Positioned(left: 0, right: 0, top: 84, child: _waitingHint()),
-            if (!_started)
-              Center(child: SingleChildScrollView(child: _startCard()))
-            else if (_countdown > 0)
-              Center(child: _countdownNumber())
-            else if (_finished && _listening)
-              Center(child: SingleChildScrollView(child: _resultCard()))
-            else if (!_playing)
-              Center(child: _pauseCard()),
-          ],
+            );
+            return Stack(
+              children: [
+                Column(
+                  children: [
+                    _header(),
+                    // Portrait: the board above the hand; landscape: side by side.
+                    Expanded(
+                      child: portrait
+                          ? Column(
+                              children: [
+                                Expanded(flex: 5, child: board),
+                                Expanded(flex: 4, child: _handGuide()),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(child: board),
+                                SizedBox(
+                                  width: math.min(260, box.maxWidth * .28),
+                                  child: _handGuide(),
+                                ),
+                              ],
+                            ),
+                    ),
+                    _controls(),
+                  ],
+                ),
+                if (!_started)
+                  Center(child: SingleChildScrollView(child: _startCard()))
+                else if (_countdown > 0)
+                  Center(child: _countdownNumber())
+                else if (_finished && _listening)
+                  Center(child: SingleChildScrollView(child: _resultCard()))
+                else if (!_playing)
+                  Center(child: _pauseCard()),
+              ],
+            );
+          },
         ),
       ),
     ),
   );
+
+  /// The fretting hand with the finger for the current note lit, and what
+  /// to play in words.
+  Widget _handGuide() {
+    final i = _currentNote;
+    final note = i == null ? null : _notes[i];
+    final finger = note?.finger ?? 0;
+    var glow = 0.0;
+    if (note != null) {
+      final ahead =
+          (note.absoluteTime + _leadTicks - _currentTick) / _ticksPerSecond;
+      glow = ahead <= .1 ? 1 : (1 - ahead / 1.5).clamp(0, 1).toDouble();
+      glow = (glow * 5).round() / 5;
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+      child: Column(
+        children: [
+          // Its own layer: the hand repaints only when the finger or its
+          // glow changes, not with every frame of the board.
+          Expanded(
+            child: RepaintBoundary(
+              child: CustomPaint(
+                key: const ValueKey('finger-hand'),
+                size: Size.infinite,
+                painter: HandPainter(finger: finger, glow: glow),
+              ),
+            ),
+          ),
+          if (note != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                finger == 0
+                    ? '${fingerNames[0]} • الوتر ${note.note.s}'
+                    : '${fingerNames[finger]} • الوتر ${note.note.s} • العتبة ${note.note.f}',
+                key: const ValueKey('finger-label'),
+                textDirection: TextDirection.rtl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: fingerColors[finger],
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   Widget _header() => Padding(
     padding: const EdgeInsets.fromLTRB(8, 6, 12, 0),
@@ -514,7 +633,9 @@ class _GameScreenState extends State<GameScreen>
         decoration: BoxDecoration(
           color: AppTheme.surface.withValues(alpha: .9),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: stringColors[note.s - 1]),
+          border: Border.all(
+            color: fingerColors[_notes[_judge.firstOpen!].finger],
+          ),
         ),
         child: Text(
           'اعزف النغمة: الوتر ${note.s} • العتبة ${note.f}',
@@ -670,7 +791,7 @@ class _GameScreenState extends State<GameScreen>
           if (!_practicing)
             Text(
               'فائت ${count(Verdict.missed)}',
-              style: const TextStyle(color: Color(0xFF8A8F8C)),
+              style: const TextStyle(color: missedColor),
             ),
         ],
       ),

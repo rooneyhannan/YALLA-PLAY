@@ -7,12 +7,16 @@ import '../../../core/theme/app_theme.dart';
 import '../data/ball_path.dart';
 import '../data/note_judge.dart';
 import '../data/song_data.dart';
+import 'hand_painter.dart';
 
 /// A note placed on the song's time line, in ticks.
 class GameNote {
   final Note note;
   final double absoluteTime;
-  const GameNote(this.note, this.absoluteTime);
+
+  /// Finger of the fretting hand: 1 index … 4 pinky, 0 open string.
+  final int finger;
+  const GameNote(this.note, this.absoluteTime, {this.finger = 0});
 }
 
 /// A verdict shown briefly above the note it was given for.
@@ -25,22 +29,11 @@ class FeedbackMark {
   const FeedbackMark(this.verdict, this.string, this.shownAt);
 }
 
-/// One color per string, 0 = high E … 5 = low E, picked to sit on the
-/// app's dark background; green and yellow are left for the verdicts.
-const stringColors = <Color>[
-  Color(0xFFFF5C6C),
-  Color(0xFFFF9A3D),
-  Color(0xFFE860C0),
-  Color(0xFFA27BFF),
-  Color(0xFF4F8BFF),
-  Color(0xFF3ED8E8),
-];
-
 /// Colors a note takes once judged: played on time, played early or late,
 /// and not played at all.
 const perfectColor = Color(0xFF35E26B),
-    offTimeColor = Color(0xFFFFE030),
-    missedColor = Color(0xFF5A5E5C);
+    offTimeColor = Color(0xFFC6E83A),
+    missedColor = Color(0xFFFF4D4D);
 
 Color verdictColor(Verdict verdict) => switch (verdict) {
   Verdict.perfect => perfectColor,
@@ -103,6 +96,9 @@ class HighwayPainter extends CustomPainter {
   static const _beatTicks = 4, _barTicks = 16;
 
   late double _zoom, _hitU;
+
+  /// Shrinks the ball's jumps on a short board, so they stay on screen.
+  late double _lift;
   late BoardProjection _board;
 
   /// Ball and note time t (in ticks) → position along the board.
@@ -111,7 +107,13 @@ class HighwayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final narrow = size.width < 600;
-    _zoom = narrow ? 34 : 52;
+    // Narrow screens pack the notes closer, to see about two seconds ahead.
+    _zoom = size.width < 450
+        ? 26
+        : narrow
+        ? 34
+        : 52;
+    _lift = math.min(1.0, size.height / 520);
     final hitX = narrow ? size.width * .24 : size.width * .2;
     _hitU = hitX - size.width / 2;
     _board = BoardProjection(
@@ -328,12 +330,16 @@ class HighwayPainter extends CustomPainter {
     // Judged notes take the color of their verdict; hit ones keep shining
     // after they pass.
     final color = verdict == null
-        ? stringColors[string]
+        ? fingerColors[gameNote.finger]
         : verdictColor(verdict);
     final past = u1 < _hitU;
     final playing =
         hit || waiting || (u0 <= _hitU && _hitU <= u1 + 6 && verdicts == null);
-    final alpha = past && !hit ? .3 : 1.0;
+    final alpha = verdict == Verdict.missed
+        ? .7
+        : past && !hit
+        ? .3
+        : 1.0;
     final pill = RRect.fromLTRBR(
       a.dx,
       a.dy - height / 2,
@@ -421,7 +427,7 @@ class HighwayPainter extends CustomPainter {
     return _board.project(
       _u(t),
       BoardProjection.stringDepth(state.string),
-      lift: state.height + 14,
+      lift: state.height * _lift + 14,
     );
   }
 
@@ -463,20 +469,24 @@ class HighwayPainter extends CustomPainter {
     // Ring spreading from the note the ball just landed on.
     final since = state.sinceLanding;
     if (since != null && since < .9 && state.landed != null) {
-      final string = ball.strings[state.landed!];
+      final finger = notes[state.landed!].finger;
       canvas.drawCircle(
         ground,
         (14 + since * 40) * scale,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3 * scale
-          ..color = stringColors[string].withValues(
+          ..color = fingerColors[finger].withValues(
             alpha: .7 * (1 - since / .9),
           ),
       );
     }
     final radius = 16 * scale;
-    final center = _board.project(_hitU, v, lift: state.height + radius);
+    final center = _board.project(
+      _hitU,
+      v,
+      lift: state.height * _lift + radius,
+    );
     // Squashed for a moment when it lands.
     final squash = since != null && since < .25 ? 1 - since / .25 : 0.0;
     final ballRect = Rect.fromCenter(
@@ -517,9 +527,7 @@ class HighwayPainter extends CustomPainter {
       if (age < 0 || age > .9) continue;
       final v = BoardProjection.stringDepth(mark.string.toDouble());
       final at = _board.project(_hitU, v, lift: 44 + age * 60);
-      final color = mark.verdict == Verdict.missed
-          ? const Color(0xFF8A8F8C)
-          : verdictColor(mark.verdict);
+      final color = verdictColor(mark.verdict);
       final text = TextPainter(
         text: TextSpan(
           text: _verdictText[mark.verdict],
@@ -584,7 +592,7 @@ class SongOverviewPainter extends CustomPainter {
         Paint()
           ..color = verdict != null
               ? verdictColor(verdict)
-              : stringColors[string].withValues(alpha: played ? .35 : .9)
+              : fingerColors[n.finger].withValues(alpha: played ? .35 : .9)
           ..strokeWidth = math.max(1.5, lane * .7)
           ..strokeCap = StrokeCap.round,
       );
