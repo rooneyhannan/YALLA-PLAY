@@ -18,7 +18,7 @@ class FakeTunerEngine implements TunerEngine {
   bool get running => onPitch != null;
 
   @override
-  Future<void> start(PitchCallback onPitch) async {
+  Future<void> start(PitchCallback onPitch, {FrameCallback? onFrame}) async {
     if (failWith != null) throw failWith!;
     this.onPitch = onPitch;
   }

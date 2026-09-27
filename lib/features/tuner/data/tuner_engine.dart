@@ -6,11 +6,15 @@ import 'tuner_engine_stub.dart'
 /// [level] is the RMS input level from 0 to 1.
 typedef PitchCallback = void Function(double? frequency, double level);
 
+/// Receives the raw samples of each loud enough frame, just before its
+/// pitch, for checks that look for one expected note.
+typedef FrameCallback = void Function(List<double> samples, num sampleRate);
+
 /// Listens to the microphone and reports pitches until [stop] is called.
 abstract class TunerEngine {
   /// Must be called from a user gesture (a tap), or browsers keep the audio
   /// context suspended. Throws a [TunerException] when listening fails.
-  Future<void> start(PitchCallback onPitch);
+  Future<void> start(PitchCallback onPitch, {FrameCallback? onFrame});
   void stop();
 }
 

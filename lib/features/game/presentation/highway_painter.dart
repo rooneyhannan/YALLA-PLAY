@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../data/ball_path.dart';
+import '../data/note_judge.dart';
 import '../data/song_data.dart';
 
 /// A note placed on the song's time line, in ticks.
@@ -12,6 +13,16 @@ class GameNote {
   final Note note;
   final double absoluteTime;
   const GameNote(this.note, this.absoluteTime);
+}
+
+/// A verdict shown briefly above the note it was given for.
+class FeedbackMark {
+  final Verdict verdict;
+  final int string;
+
+  /// Screen clock ([HighwayPainter.seconds]) when it was given.
+  final double shownAt;
+  const FeedbackMark(this.verdict, this.string, this.shownAt);
 }
 
 /// One color per string, 0 = high E … 5 = low E, picked to sit on the
@@ -57,7 +68,13 @@ class HighwayPainter extends CustomPainter {
   /// Seconds since the screen opened, for the drifting gold dust.
   final double seconds;
   final Color background;
+
+  /// Verdict per note while the microphone scores, else null.
+  final List<Verdict?>? verdicts;
+  final List<FeedbackMark> feedback;
   HighwayPainter({
+    this.verdicts,
+    this.feedback = const [],
     required this.notes,
     required this.ball,
     required this.currentTick,
@@ -94,6 +111,7 @@ class HighwayPainter extends CustomPainter {
     _notes(canvas, size);
     _trail(canvas, size);
     _ball(canvas);
+    _feedback(canvas);
   }
 
   void _sky(Canvas canvas, Size size) {
@@ -267,14 +285,20 @@ class HighwayPainter extends CustomPainter {
   void _notes(Canvas canvas, Size size) {
     // Back strings first, so nearer notes overlap them.
     for (var string = 0; string < 6; string++) {
-      for (final gameNote in notes) {
-        if (gameNote.note.s - 1 != string) continue;
-        _note(canvas, size, gameNote, string);
+      for (var i = 0; i < notes.length; i++) {
+        if (notes[i].note.s - 1 != string) continue;
+        _note(canvas, size, notes[i], string, verdicts?[i]);
       }
     }
   }
 
-  void _note(Canvas canvas, Size size, GameNote gameNote, int string) {
+  void _note(
+    Canvas canvas,
+    Size size,
+    GameNote gameNote,
+    int string,
+    Verdict? verdict,
+  ) {
     final start = gameNote.absoluteTime + leadTicks;
     final u0 = _u(start);
     final u1 = _u(start + gameNote.note.d) - 6;
@@ -283,10 +307,14 @@ class HighwayPainter extends CustomPainter {
     final a = _board.project(u0, v), b = _board.project(u1, v);
     if (b.dx < -40 || a.dx > size.width + 40) return;
     final height = 36 * scale;
-    final color = stringColors[string];
+    final hit = verdict != null && verdict != Verdict.missed;
+    // Missed notes turn grey; hit ones keep shining after they pass.
+    final color = verdict == Verdict.missed
+        ? const Color(0xFF5A5E5C)
+        : stringColors[string];
     final past = u1 < _hitU;
-    final playing = u0 <= _hitU && _hitU <= u1 + 6;
-    final alpha = past ? .3 : 1.0;
+    final playing = hit || (u0 <= _hitU && _hitU <= u1 + 6 && verdicts == null);
+    final alpha = past && !hit ? .3 : 1.0;
     final pill = RRect.fromLTRBR(
       a.dx,
       a.dy - height / 2,
@@ -434,9 +462,47 @@ class HighwayPainter extends CustomPainter {
       );
   }
 
+  static const _verdictText = {
+    Verdict.perfect: 'ممتاز',
+    Verdict.early: 'مبكر',
+    Verdict.late: 'متأخر',
+    Verdict.missed: 'فائت',
+  };
+
+  /// Verdict words rising and fading above the hit line.
+  void _feedback(Canvas canvas) {
+    for (final mark in feedback) {
+      final age = seconds - mark.shownAt;
+      if (age < 0 || age > .9) continue;
+      final v = BoardProjection.stringDepth(mark.string.toDouble());
+      final at = _board.project(_hitU, v, lift: 44 + age * 60);
+      final color = switch (mark.verdict) {
+        Verdict.perfect => AppTheme.gold,
+        Verdict.early || Verdict.late => const Color(0xFFFF8A5B),
+        Verdict.missed => const Color(0xFF8A8F8C),
+      };
+      final text = TextPainter(
+        text: TextSpan(
+          text: _verdictText[mark.verdict],
+          style: TextStyle(
+            fontFamily: 'IBM Plex Sans Arabic',
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: color.withValues(alpha: 1 - age / .9),
+            shadows: const [Shadow(blurRadius: 6, color: Colors.black)],
+          ),
+        ),
+        textDirection: TextDirection.rtl,
+      )..layout();
+      text.paint(canvas, at - Offset(text.width / 2, text.height / 2));
+    }
+  }
+
   @override
   bool shouldRepaint(HighwayPainter old) =>
-      old.currentTick != currentTick || old.seconds != seconds;
+      old.currentTick != currentTick ||
+      old.seconds != seconds ||
+      old.feedback.length != feedback.length;
 }
 
 /// The whole song in one strip: colored dashes per string and the part

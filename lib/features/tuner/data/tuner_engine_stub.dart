@@ -5,7 +5,7 @@ TunerEngine createPlatformTunerEngine() => _UnsupportedTunerEngine();
 
 class _UnsupportedTunerEngine implements TunerEngine {
   @override
-  Future<void> start(PitchCallback onPitch) async =>
+  Future<void> start(PitchCallback onPitch, {FrameCallback? onFrame}) async =>
       throw const TunerException(TunerError.unsupported);
 
   @override

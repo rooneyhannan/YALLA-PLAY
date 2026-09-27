@@ -48,6 +48,14 @@ void main() {
           find.byKey(const ValueKey('session-progress')),
         )
         .value!;
+    // Nothing moves until the player starts; then a 3-2-1 countdown.
+    await tester.pump(const Duration(seconds: 1));
+    expect(progress(), 0);
+    await tester.tap(find.byKey(const ValueKey('game-start-preview')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('game-countdown')), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 3100));
+    expect(progress(), 0);
     await tester.pump(const Duration(seconds: 1));
     expect(progress(), greaterThan(0));
     await tester.tap(find.byKey(const ValueKey('game-toggle')));
@@ -72,6 +80,9 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('daily-start')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byKey(const ValueKey('game-start-preview')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 3100));
       await tester.tap(find.byKey(const ValueKey('game-restart')));
       await tester.pump();
       double progress() => tester
