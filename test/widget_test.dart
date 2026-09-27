@@ -6,6 +6,22 @@ import 'package:yalla_play/core/models/song.dart';
 import 'package:yalla_play/main.dart';
 import 'package:yalla_play/features/game/presentation/game_screen.dart';
 
+import 'demo_chart.dart';
+
+/// Opening a song reads its chart file: real I/O, which the test's fake
+/// clock does not wait for.
+Future<void> chartLoaded(WidgetTester tester) async {
+  await tester.pump();
+  for (var i = 0; i < 50; i++) {
+    if (find.byType(GameScreen).evaluate().isNotEmpty) break;
+    await tester.runAsync(
+      () => Future<void>.delayed(Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadDesignFonts);
@@ -39,8 +55,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('song-life')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await chartLoaded(tester);
     expect(find.byType(GameScreen), findsOneWidget);
     expect(find.text('Life by the Drop'), findsWidgets);
     expect(find.byKey(const ValueKey('guitar-board')), findsOneWidget);
@@ -79,8 +94,7 @@ void main() {
       await tester.pumpWidget(const YallaGuitarApp());
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('daily-start')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await chartLoaded(tester);
       await tester.tap(find.byKey(const ValueKey('game-start-preview')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 3100));
@@ -117,7 +131,11 @@ void main() {
     ]) {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
-      await tester.pumpWidget(MaterialApp(home: GameScreen(song: songs.first)));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: GameScreen(song: songs.first, chart: demoChart),
+        ),
+      );
       await tester.tap(find.byKey(const ValueKey('game-start-preview')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 3100));

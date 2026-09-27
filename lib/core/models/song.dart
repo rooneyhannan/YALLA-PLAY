@@ -6,6 +6,9 @@ class Song {
   final String image;
   final String difficulty;
   final bool isPremium;
+
+  /// Name of the song's chart in assets/songs/, when it has one.
+  final String? chart;
   const Song({
     required this.id,
     required this.title,
@@ -14,8 +17,9 @@ class Song {
     required this.image,
     this.difficulty = 'مبتدئ',
     this.isPremium = false,
+    this.chart,
   });
-  bool get hasChart => id == 'badak';
+  bool get hasChart => chart != null;
 }
 
 const songs = <Song>[
@@ -25,6 +29,7 @@ const songs = <Song>[
     artist: 'فيروز',
     category: 'طرب',
     image: 's1_2.png',
+    chart: 'badak',
   ),
   Song(
     id: 'life',

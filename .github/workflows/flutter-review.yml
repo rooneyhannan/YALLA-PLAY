@@ -20,6 +20,8 @@ jobs:
       - run: dart format lib test
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
+      - name: Yalla Studio tests
+        run: node --test 'studio/test/*.test.mjs'
       - run: flutter test --dart-define=CAPTURE_PREVIEWS=true --update-goldens test/design_preview_test.dart
       - uses: actions/upload-artifact@v4
         with:

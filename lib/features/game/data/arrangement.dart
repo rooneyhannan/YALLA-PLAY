@@ -54,17 +54,22 @@ class Arrangement {
   final List<Chord> chords;
   const Arrangement._(this.events, this.chords);
 
-  static const beatTicks = 4.0, barTicks = 16.0, _halfBar = 8.0;
-
   /// A pitch counts as asked for from this long before its note until this
-  /// long after its start: the early and late windows, with some margin.
-  static const _askedBefore = 2.0, _askedAfter = 3.0;
+  /// long after its start, in seconds: the early and late windows, with
+  /// some margin.
+  static const _askedBefore = .33, _askedAfter = .5;
 
   factory Arrangement.of(
     List<MelodyNote> melody, {
     required double firstBeat,
     required double end,
+    double beatTicks = 4,
+    double barTicks = 16,
+    double ticksPerSecond = 6,
   }) {
+    final halfBar = barTicks / 2;
+    final askedBefore = _askedBefore * ticksPerSecond;
+    final askedAfter = _askedAfter * ticksPerSecond;
     final events = <SoundEvent>[];
     // Metronome on every beat, stressed on the first beat of each bar.
     for (
@@ -76,21 +81,18 @@ class Arrangement {
       events.add(SoundEvent(t, accent ? Voice.accent : Voice.click, 0, 1, 1));
     }
 
-    final chords = _harmonize(melody, firstBeat);
+    final chords = _harmonize(melody, firstBeat, halfBar);
     final last = melody.isEmpty
         ? firstBeat
         : melody.map((n) => n.start + n.length).reduce(math.max);
     Set<int> asked(double from, double to) => {
       for (final n in melody)
-        if (n.start - _askedBefore < to &&
-            n.start + math.max(n.length, _askedAfter) > from)
+        if (n.start - askedBefore < to &&
+            n.start + math.max(n.length, askedAfter) > from)
           pitchClass(n.frequency),
     };
     Chord chordAt(double t) =>
-        chords[((t - firstBeat) / _halfBar).floor().clamp(
-          0,
-          chords.length - 1,
-        )];
+        chords[((t - firstBeat) / halfBar).floor().clamp(0, chords.length - 1)];
 
     // Soft chords on every beat, a bass note every half bar.
     for (var t = firstBeat; t < last; t += beatTicks) {
@@ -115,8 +117,8 @@ class Arrangement {
           SoundEvent(t, Voice.chord, _midiFrequency(midi), beatTicks, .16),
         );
       }
-      if ((t - firstBeat) % _halfBar == 0) {
-        final avoidBass = asked(t, t + _halfBar);
+      if ((t - firstBeat) % halfBar == 0) {
+        final avoidBass = asked(t, t + halfBar);
         final root = chord.root, fifth = (chord.root + 7) % 12;
         final pc = !avoidBass.contains(root)
             ? root
@@ -127,7 +129,7 @@ class Arrangement {
           // Between E2 and D#3, below the guitar's melody.
           final midi = 40 + (pc - 40) % 12;
           events.add(
-            SoundEvent(t, Voice.bass, _midiFrequency(midi), _halfBar, .3),
+            SoundEvent(t, Voice.bass, _midiFrequency(midi), halfBar, .3),
           );
         }
       }
@@ -143,7 +145,11 @@ class Arrangement {
   /// Picks a chord for every half bar: the triad of the song's key that
   /// holds most of the melody sounding in it, staying on the chord before
   /// when that fits as well.
-  static List<Chord> _harmonize(List<MelodyNote> melody, double firstBeat) {
+  static List<Chord> _harmonize(
+    List<MelodyNote> melody,
+    double firstBeat,
+    double halfBar,
+  ) {
     if (melody.isEmpty) return const [(root: 0, minor: false)];
     final key = _key(melody);
     final scale = key.minor
@@ -162,11 +168,11 @@ class Arrangement {
     ];
 
     final end = melody.map((n) => n.start + n.length).reduce(math.max);
-    final count = math.max(1, ((end - firstBeat) / _halfBar).ceil());
+    final count = math.max(1, ((end - firstBeat) / halfBar).ceil());
     final chords = <Chord>[];
     Chord previous = (root: key.tonic, minor: key.minor);
     for (var i = 0; i < count; i++) {
-      final from = firstBeat + i * _halfBar, to = from + _halfBar;
+      final from = firstBeat + i * halfBar, to = from + halfBar;
       final weight = List.filled(12, 0.0);
       for (final n in melody) {
         final overlap =

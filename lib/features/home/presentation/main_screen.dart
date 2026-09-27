@@ -4,7 +4,7 @@ import '../../../core/app_build.dart';
 import '../../../core/models/song.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/design_widgets.dart';
-import '../../game/presentation/game_screen.dart';
+import '../../game/presentation/song_loader.dart';
 import '../../learn/presentation/learn_screen.dart';
 import '../../song_library/presentation/songs_screen.dart';
 import '../../tuner/presentation/tuner_screen.dart';
@@ -32,7 +32,7 @@ class _MainScreenState extends State<MainScreen> {
     setState(() => _recent = song);
     Navigator.of(
       context,
-    ).push(MaterialPageRoute<void>(builder: (_) => GameScreen(song: song)));
+    ).push(MaterialPageRoute<void>(builder: (_) => SongLoader(song: song)));
   }
 
   void _toggleFavorite(Song song) => setState(() {

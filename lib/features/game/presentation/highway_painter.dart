@@ -91,9 +91,12 @@ class HighwayPainter extends CustomPainter {
     required this.totalTicks,
     required this.seconds,
     required this.background,
+    this.beatTicks = 4,
+    this.barTicks = 16,
   });
 
-  static const _beatTicks = 4, _barTicks = 16;
+  /// Ticks of a beat and of a bar, for the lines across the board.
+  final double beatTicks, barTicks;
 
   late double _zoom, _hitU;
 
@@ -205,17 +208,17 @@ class HighwayPainter extends CustomPainter {
     );
     // Beat lines run from front to back and lean with the perspective.
     final firstBeat =
-        ((currentTick - _hitU / _zoom - size.width / _zoom) / _beatTicks)
+        ((currentTick - _hitU / _zoom - size.width / _zoom) / beatTicks)
             .floor() *
-        _beatTicks;
+        beatTicks;
     final tile = Paint()..color = Colors.white.withValues(alpha: .025);
     for (
       var t = firstBeat.toDouble();
       _u(t) * _board.scale(1) < size.width;
-      t += _beatTicks
+      t += beatTicks
     ) {
-      if (((t - leadTicks) / _beatTicks).round().isEven) {
-        final next = t + _beatTicks;
+      if (((t - leadTicks) / beatTicks).round().isEven) {
+        final next = t + beatTicks;
         canvas.drawPath(
           Path()
             ..moveTo(_board.project(_u(t), 0).dx, _board.project(_u(t), 0).dy)
@@ -232,7 +235,7 @@ class HighwayPainter extends CustomPainter {
           tile,
         );
       }
-      final bar = (t - leadTicks) % _barTicks == 0;
+      final bar = (t - leadTicks) % barTicks == 0;
       canvas.drawLine(
         _board.project(_u(t), 0),
         _board.project(_u(t), 1),

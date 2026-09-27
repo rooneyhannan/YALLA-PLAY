@@ -65,6 +65,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/design/
+    - assets/songs/
   fonts:
     - family: IBM Plex Sans Arabic
       fonts:

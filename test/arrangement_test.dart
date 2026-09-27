@@ -3,10 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yalla_play/features/game/data/arrangement.dart';
 import 'package:yalla_play/features/game/data/note_judge.dart';
-import 'package:yalla_play/features/game/data/song_data.dart';
 import 'package:yalla_play/features/game/data/sound_engine.dart';
 import 'package:yalla_play/features/game/data/sound_scheduler.dart';
 import 'package:yalla_play/features/game/data/synth.dart';
+
+import 'demo_chart.dart';
 
 List<MelodyNote> songMelody() {
   var t = 6.0;
