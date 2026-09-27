@@ -97,7 +97,7 @@ void main() {
   test('chords come from the key and hold the melody they sound with', () {
     expect(arrangement.chords, isNotEmpty);
     for (final c in arrangement.chords) {
-      expect(chordTones(c), hasLength(3));
+      expect(c.chord.tones, hasLength(3));
     }
   });
 

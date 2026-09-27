@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'chord_symbol.dart';
 import 'synth.dart';
 
 /// One sound at a point of the song, in ticks.
@@ -31,14 +32,9 @@ int pitchClass(double frequency) =>
 double _midiFrequency(int midi) =>
     440 * math.pow(2, (midi - 69) / 12).toDouble();
 
-/// A major or minor triad.
-typedef Chord = ({int root, bool minor});
-
-List<int> chordTones(Chord chord) => [
-  chord.root,
-  (chord.root + (chord.minor ? 3 : 4)) % 12,
-  (chord.root + 7) % 12,
-];
+/// A chord of the song's backing: when it starts and how long it lasts, in
+/// ticks.
+typedef ChordSpan = ({double start, double length, ChordSymbol chord});
 
 /// Everything the song plays besides the player: metronome, backing chords
 /// and the melody itself.
@@ -50,8 +46,9 @@ class Arrangement {
   /// All events, ordered by tick.
   final List<SoundEvent> events;
 
-  /// The chord of each half bar from [firstBeat] on.
-  final List<Chord> chords;
+  /// The chords the backing plays: the song's own, or, when it has none,
+  /// one chosen for each half bar.
+  final List<ChordSpan> chords;
   const Arrangement._(this.events, this.chords);
 
   /// A pitch counts as asked for from this long before its note until this
@@ -66,6 +63,7 @@ class Arrangement {
     double beatTicks = 4,
     double barTicks = 16,
     double ticksPerSecond = 6,
+    List<ChordSpan>? chords,
   }) {
     final halfBar = barTicks / 2;
     final askedBefore = _askedBefore * ticksPerSecond;
@@ -81,32 +79,50 @@ class Arrangement {
       events.add(SoundEvent(t, accent ? Voice.accent : Voice.click, 0, 1, 1));
     }
 
-    final chords = _harmonize(melody, firstBeat, halfBar);
-    final last = melody.isEmpty
-        ? firstBeat
-        : melody.map((n) => n.start + n.length).reduce(math.max);
+    final given = chords != null && chords.isNotEmpty;
+    final spans = given
+        ? ([...chords]..sort((a, b) => a.start.compareTo(b.start)))
+        : [
+            for (final (i, c) in _harmonize(melody, firstBeat, halfBar).indexed)
+              (start: firstBeat + i * halfBar, length: halfBar, chord: c),
+          ];
+    final last = math.max(
+      melody.isEmpty
+          ? firstBeat
+          : melody.map((n) => n.start + n.length).reduce(math.max),
+      given ? spans.map((c) => c.start + c.length).reduce(math.max) : 0.0,
+    );
     Set<int> asked(double from, double to) => {
       for (final n in melody)
         if (n.start - askedBefore < to &&
             n.start + math.max(n.length, askedAfter) > from)
           pitchClass(n.frequency),
     };
-    Chord chordAt(double t) =>
-        chords[((t - firstBeat) / halfBar).floor().clamp(0, chords.length - 1)];
+    // The chord sounding at a tick; none in the gaps between given chords.
+    ChordSymbol? chordAt(double t) {
+      for (final c in spans.reversed) {
+        if (c.start <= t + 1e-6) {
+          return t < c.start + c.length - 1e-6 || !given ? c.chord : null;
+        }
+      }
+      return given ? null : spans.first.chord;
+    }
 
     // Soft chords on every beat, a bass note every half bar.
     for (var t = firstBeat; t < last; t += beatTicks) {
       final chord = chordAt(t);
+      if (chord == null) continue;
       final avoid = asked(t, t + beatTicks);
       // Between G3 and F#4: under and around the melody.
       final voicing = [
-        for (final pc in chordTones(chord))
+        for (final pc in chord.tones)
           if (!avoid.contains(pc)) 55 + (pc - 55) % 12,
       ];
-      // A tone left out for the player is made up by the seventh, or by
-      // doubling a tone an octave up, so the chord stays full.
-      final seventh = (chord.root + (chord.minor ? 10 : 11)) % 12;
-      if (voicing.length < 3 && !avoid.contains(seventh)) {
+      // A tone left out for the player is made up so the chord stays full:
+      // a chosen triad by its seventh, any chord by doubling a tone an
+      // octave up.
+      final seventh = (chord.root + (chord.isMinor ? 10 : 11)) % 12;
+      if (!given && voicing.length < 3 && !avoid.contains(seventh)) {
         voicing.add(55 + (seventh - 55) % 12);
       }
       if (voicing.length < 3 && voicing.isNotEmpty) {
@@ -119,12 +135,12 @@ class Arrangement {
       }
       if ((t - firstBeat) % halfBar == 0) {
         final avoidBass = asked(t, t + halfBar);
-        final root = chord.root, fifth = (chord.root + 7) % 12;
-        final pc = !avoidBass.contains(root)
-            ? root
-            : !avoidBass.contains(fifth)
-            ? fifth
-            : null;
+        // The bass note of the chord, else its fifth or another tone of it.
+        final pc = [
+          chord.bassNote,
+          (chord.root + 7) % 12,
+          ...chord.tones,
+        ].where((pc) => !avoidBass.contains(pc)).firstOrNull;
         if (pc != null) {
           // Between E2 and D#3, below the guitar's melody.
           final midi = 40 + (pc - 40) % 12;
@@ -139,38 +155,38 @@ class Arrangement {
       events.add(SoundEvent(n.start, Voice.guitar, n.frequency, n.length, .5));
     }
     events.sort((a, b) => a.tick.compareTo(b.tick));
-    return Arrangement._(events, chords);
+    return Arrangement._(events, spans);
   }
 
   /// Picks a chord for every half bar: the triad of the song's key that
   /// holds most of the melody sounding in it, staying on the chord before
   /// when that fits as well.
-  static List<Chord> _harmonize(
+  static List<ChordSymbol> _harmonize(
     List<MelodyNote> melody,
     double firstBeat,
     double halfBar,
   ) {
-    if (melody.isEmpty) return const [(root: 0, minor: false)];
+    if (melody.isEmpty) return [ChordSymbol.triad(0, minor: false)];
     final key = _key(melody);
     final scale = key.minor
         ? const [0, 2, 3, 5, 7, 8, 10]
         : const [0, 2, 4, 5, 7, 9, 11];
-    final candidates = <Chord>[
+    final candidates = <ChordSymbol>[
       for (var degree = 0; degree < 7; degree++)
         // Diminished triads are left out; they rarely carry a melody.
         if ((scale[(degree + 4) % 7] - scale[degree]) % 12 == 7)
-          (
-            root: (key.tonic + scale[degree]) % 12,
+          ChordSymbol.triad(
+            (key.tonic + scale[degree]) % 12,
             minor: (scale[(degree + 2) % 7] - scale[degree]) % 12 == 3,
           ),
       // The major dominant of minor keys.
-      if (key.minor) (root: (key.tonic + 7) % 12, minor: false),
+      if (key.minor) ChordSymbol.triad((key.tonic + 7) % 12, minor: false),
     ];
 
     final end = melody.map((n) => n.start + n.length).reduce(math.max);
     final count = math.max(1, ((end - firstBeat) / halfBar).ceil());
-    final chords = <Chord>[];
-    Chord previous = (root: key.tonic, minor: key.minor);
+    final chords = <ChordSymbol>[];
+    var previous = ChordSymbol.triad(key.tonic, minor: key.minor);
     for (var i = 0; i < count; i++) {
       final from = firstBeat + i * halfBar, to = from + halfBar;
       final weight = List.filled(12, 0.0);
@@ -184,8 +200,8 @@ class Arrangement {
         chords.add(previous);
         continue;
       }
-      double score(Chord c) {
-        final tones = chordTones(c);
+      double score(ChordSymbol c) {
+        final tones = c.tones;
         var s = 0.0;
         for (var pc = 0; pc < 12; pc++) {
           s += tones.contains(pc) ? weight[pc] : -.5 * weight[pc];

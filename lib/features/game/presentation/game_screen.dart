@@ -142,6 +142,14 @@ class _GameScreenState extends State<GameScreen>
         barTicks: (widget.chart.ticksPerBeat * widget.chart.beatsPerBar)
             .toDouble(),
         ticksPerSecond: widget.chart.ticksPerSecond,
+        chords: [
+          for (final c in widget.chart.chords)
+            (
+              start: c.tick + _leadTicks,
+              length: c.length.toDouble(),
+              chord: c.chord,
+            ),
+        ],
       ).events,
     );
     _ticker = createTicker(_onTick)..start();

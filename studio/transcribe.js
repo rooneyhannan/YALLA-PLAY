@@ -250,8 +250,97 @@ export function chartNotes(detected, { bpm, offset, ticksPerBeat = 4, melodyOnly
   return grid.map((n, i) => ({ t: n.tick, s: tab[i].s, f: tab[i].f, d: n.length, finger: fingers[i] }));
 }
 
+// ---------------------------------------------------------------- chords
+
+/** Chord types by suffix; the same table is in the app's chord_symbol.dart. */
+export const CHORD_QUALITIES = {
+  '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10],
+  6: [0, 4, 7, 9], m6: [0, 3, 7, 9], dim: [0, 3, 6], aug: [0, 4, 8], sus2: [0, 2, 7],
+  sus4: [0, 5, 7], add9: [0, 4, 7, 14], 9: [0, 4, 7, 10, 14], 5: [0, 7],
+};
+export const ROOT_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const LETTERS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+const pitchOf = (letter, accidental) => (LETTERS[letter] + (accidental === '#' ? 1 : accidental === 'b' ? -1 : 0) + 12) % 12;
+
+/** Reads `Dm`, `A7`, `C/E` … into {root, quality, intervals, bass}, or null. */
+export function parseChord(name) {
+  const m = /^([A-G])([#b]?)([a-z0-9]*)(?:\/([A-G])([#b]?))?$/.exec((name ?? '').trim());
+  if (!m || !Object.hasOwn(CHORD_QUALITIES, m[3])) return null;
+  const root = pitchOf(m[1], m[2]);
+  const bass = m[4] ? pitchOf(m[4], m[5]) : null;
+  return { root, quality: m[3], intervals: CHORD_QUALITIES[m[3]], bass: bass === root ? null : bass };
+}
+
+/** The name of a chord from its parts. */
+export const chordName = (root, quality, bass = null) =>
+  ROOT_NAMES[root] + quality + (bass == null || bass === root ? '' : '/' + ROOT_NAMES[bass]);
+
+/** The pitch classes of a chord. */
+export const chordTones = (c) => [...new Set(c.intervals.map((i) => (c.root + i) % 12))];
+
+const KEY_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const KEY_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+
+/**
+ * Suggests chords for a melody, as the app does when a song has none: the
+ * key by the Krumhansl profiles, then per half bar the triad of the key
+ * that holds most of the melody, staying on the chord before when that
+ * fits as well. Same chords in a row become one. Returns [{t, d, name}].
+ */
+export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {}) {
+  if (!notes.length) return [];
+  const pc = (n) => midiOf(n.s, n.f) % 12;
+  const weight = new Array(12).fill(0);
+  for (const n of notes) weight[pc(n)] += n.d;
+  let key = { tonic: 0, minor: false }, bestKey = -Infinity;
+  for (let tonic = 0; tonic < 12; tonic++) {
+    for (const minor of [false, true]) {
+      const profile = minor ? KEY_MINOR : KEY_MAJOR;
+      let s = 0;
+      for (let p = 0; p < 12; p++) s += weight[p] * profile[(p - tonic + 12) % 12];
+      if (s > bestKey) { bestKey = s; key = { tonic, minor }; }
+    }
+  }
+  const scale = key.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+  const candidates = [];
+  for (let d = 0; d < 7; d++) {
+    if ((scale[(d + 4) % 7] - scale[d] + 12) % 12 !== 7) continue; // no diminished
+    candidates.push({ root: (key.tonic + scale[d]) % 12, minor: (scale[(d + 2) % 7] - scale[d] + 12) % 12 === 3 });
+  }
+  if (key.minor) candidates.push({ root: (key.tonic + 7) % 12, minor: false });
+  const tones = (c) => [c.root, (c.root + (c.minor ? 3 : 4)) % 12, (c.root + 7) % 12];
+  const half = (ticksPerBeat * beatsPerBar) / 2;
+  const end = Math.max(...notes.map((n) => n.t + n.d));
+  const chords = [];
+  let previous = { root: key.tonic, minor: key.minor };
+  for (let from = 0; from < end; from += half) {
+    const w = new Array(12).fill(0);
+    for (const n of notes) {
+      const overlap = Math.min(from + half, n.t + n.d) - Math.max(from, n.t);
+      if (overlap > 0) w[pc(n)] += overlap;
+    }
+    const total = w.reduce((a, b) => a + b);
+    if (total > 0) {
+      const score = (c) => {
+        const t = tones(c);
+        let s = 0;
+        for (let p = 0; p < 12; p++) s += t.includes(p) ? w[p] : -0.5 * w[p];
+        if (c.root === previous.root && c.minor === previous.minor) s += 0.15 * total;
+        if (c.root === key.tonic) s += 0.05 * total;
+        return s;
+      };
+      previous = candidates.reduce((a, b) => (score(b) > score(a) ? b : a));
+    }
+    const name = chordName(previous.root, previous.minor ? 'm' : '');
+    const last = chords[chords.length - 1];
+    if (last && last.name === name) last.d += half;
+    else chords.push({ t: from, d: half, name });
+  }
+  return chords;
+}
+
 /** A chart in the app's `yalla-song/1` format, one note per line. */
-export function toJson(meta, notes) {
+export function toJson(meta, notes, chords = []) {
   const head = {
     format: 'yalla-song/1',
     id: meta.id,
@@ -265,7 +354,11 @@ export function toJson(meta, notes) {
     .sort((a, b) => a.t - b.t)
     .map((n) => '    ' + JSON.stringify({ t: n.t, s: n.s, f: n.f, d: n.d, ...(n.finger == null ? {} : { finger: n.finger }) }).replaceAll(',', ', ').replaceAll(':', ': '));
   const top = JSON.stringify(head, null, 2);
-  return top.slice(0, -2) + ',\n  "notes": [\n' + lines.join(',\n') + '\n  ]\n}\n';
+  const chordLines = [...chords]
+    .sort((a, b) => a.t - b.t)
+    .map((c) => '    ' + JSON.stringify({ t: c.t, d: c.d, name: c.name }).replaceAll(',', ', ').replaceAll('":', '": '));
+  return top.slice(0, -2) + ',\n  "notes": [\n' + lines.join(',\n') + '\n  ]' +
+    (chordLines.length ? ',\n  "chords": [\n' + chordLines.join(',\n') + '\n  ]' : '') + '\n}\n';
 }
 
 /** Reads a `yalla-song/1` file back for editing; throws on a broken one. */
@@ -277,6 +370,9 @@ export function fromJson(text) {
     if (!(n.s >= 1 && n.s <= 6 && n.f >= 0 && n.f <= 24 && n.d >= 1 && n.t >= 0)) {
       throw new Error('Ungültige Note: ' + JSON.stringify(n));
     }
+  }
+  for (const c of data.chords ?? []) {
+    if (!parseChord(c.name) || !(c.d >= 1 && c.t >= 0)) throw new Error('Ungültiger Akkord: ' + JSON.stringify(c));
   }
   return data;
 }

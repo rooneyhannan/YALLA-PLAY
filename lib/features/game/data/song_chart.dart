@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+import 'chord_symbol.dart';
 import 'song_data.dart';
 
 /// A note of a chart: when it starts, in ticks, and what to play.
@@ -13,6 +14,13 @@ class ChartNote {
   /// 4 pinky, 0 open string. Otherwise the app works it out.
   final int? finger;
   const ChartNote(this.tick, this.note, {this.finger});
+}
+
+/// A chord of the backing: when it starts and how long it lasts, in ticks.
+class ChartChord {
+  final int tick, length;
+  final ChordSymbol chord;
+  const ChartChord(this.tick, this.length, this.chord);
 }
 
 /// A song's notes as Yalla Studio writes them: a `yalla-song/1` JSON file
@@ -30,12 +38,17 @@ class SongChart {
   /// Ordered by tick.
   final List<ChartNote> notes;
 
+  /// The backing's chords, ordered by tick; empty when the song leaves the
+  /// backing to the app.
+  final List<ChartChord> chords;
+
   const SongChart({
     required this.id,
     required this.title,
     required this.artist,
     required this.bpm,
     required this.notes,
+    this.chords = const [],
     this.ticksPerBeat = 4,
     this.beatsPerBar = 4,
   });
@@ -75,6 +88,19 @@ class SongChart {
       );
     }
     if (notes.isEmpty) throw const FormatException('The song has no notes');
+    final chords = <ChartChord>[];
+    for (final (i, raw) in field<List<dynamic>>(json, 'chords', []).indexed) {
+      if (raw is! Map<String, dynamic>) {
+        throw FormatException('Chord ${i + 1} is not an object');
+      }
+      final name = field<String>(raw, 'name');
+      final chord = ChordSymbol.tryParse(name);
+      final d = field<int>(raw, 'd');
+      if (chord == null) throw FormatException('Unknown chord "$name"');
+      if (d < 1) throw FormatException('Chord ${i + 1} has no length');
+      chords.add(ChartChord(field<int>(raw, 't'), d, chord));
+    }
+    chords.sort((a, b) => a.tick.compareTo(b.tick));
     notes.sort((a, b) => a.tick.compareTo(b.tick));
     return SongChart(
       id: field<String>(json, 'id'),
@@ -84,6 +110,7 @@ class SongChart {
       ticksPerBeat: field<int>(json, 'ticksPerBeat', 4),
       beatsPerBar: field<int>(json, 'beatsPerBar', 4),
       notes: notes,
+      chords: chords,
     );
   }
 

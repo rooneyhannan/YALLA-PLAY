@@ -1,8 +1,8 @@
 // Yalla Studio: open a recording, let Basic Pitch find its notes, turn them
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
-  assignFingers, chartNotes, detectTempo, fromJson, hz, melodyOf, midiOf,
-  noteName, positions, slug, toJson,
+  CHORD_QUALITIES, ROOT_NAMES, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
+  hz, melodyOf, midiOf, noteName, parseChord, positions, slug, suggestChords, toJson,
 } from './transcribe.js';
 
 const $ = (id) => document.getElementById(id);
@@ -14,6 +14,9 @@ const state = {
   meta: { id: '', title: '', artist: '', bpm: 90, ticksPerBeat: 4, beatsPerBar: 4 },
   /** {t, s, f, d, finger, fingerAuto} */
   notes: [],
+  /** The backing's chords: {t, d, name}. */
+  chords: [],
+  selectedChord: -1,
   /** What Basic Pitch heard, kept to fit the grid again with a new tempo. */
   detected: null,
   /** The recording, and the time in it where tick 0 lies. */
@@ -86,6 +89,7 @@ async function openAudio(file) {
     state.meta = { id: slug(title), title, artist: '', bpm: tempo.bpm, ticksPerBeat: 4, beatsPerBar: 4 };
     state.offset = tempo.offset;
     setNotes(chartNotes(detected, { ...tempo, ticksPerBeat: 4 }).map((n) => ({ ...n, fingerAuto: true })));
+    state.chords = [];
     undo.length = redo.length = 0;
     state.edited = false;
     openEditor(`${state.notes.length} Noten erkannt · Tempo ${tempo.bpm} BPM`);
@@ -111,10 +115,11 @@ async function openJson(file) {
       bpm: data.bpm ?? 90, ticksPerBeat: data.ticksPerBeat ?? 4, beatsPerBar: data.beatsPerBar ?? 4,
     };
     setNotes(data.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger ?? null, fingerAuto: n.finger == null })));
+    state.chords = (data.chords ?? []).map((c) => ({ t: c.t, d: c.d, name: c.name })).sort((a, b) => a.t - b.t);
     state.detected = null;
     undo.length = redo.length = 0;
     state.edited = false;
-    openEditor(`${state.notes.length} Noten geladen`);
+    openEditor(`${state.notes.length} Noten${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} geladen`);
   } catch (error) {
     alert('Die Datei ist keine gültige Song-Datei:\n' + error.message);
   }
@@ -170,7 +175,11 @@ $('save-json').addEventListener('click', () => {
 });
 
 function exportJson() {
-  return toJson(state.meta, state.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger })));
+  return toJson(
+    state.meta,
+    state.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger })),
+    state.chords,
+  );
 }
 window.yallaStudio = { state, exportJson }; // for automated tests
 
@@ -236,6 +245,7 @@ function openEditor(status) {
   $('save-json').disabled = false;
   writeMeta();
   state.selected = -1;
+  state.selectedChord = -1;
   state.scroll = 0;
   state.playhead = 0;
   resize();
@@ -308,24 +318,32 @@ function refinger() {
 }
 
 /** Applies an edit so that it can be undone. */
+const snapshot = () =>
+  JSON.stringify({ notes: state.notes, chords: state.chords, selected: state.selected, selectedChord: state.selectedChord });
+
 function change(edit) {
-  undo.push(JSON.stringify({ notes: state.notes, selected: state.selected }));
+  undo.push(snapshot());
   if (undo.length > 200) undo.shift();
   redo.length = 0;
   const selectedNote = state.notes[state.selected];
+  const chord = state.chords[state.selectedChord];
   edit();
   setNotes(state.notes);
+  state.chords.sort((a, b) => a.t - b.t);
   if (selectedNote) state.selected = state.notes.indexOf(selectedNote);
+  if (chord) state.selectedChord = state.chords.indexOf(chord);
   state.edited = true;
   inspect();
   draw();
 }
 function restore(from, to) {
   if (!from.length) return;
-  to.push(JSON.stringify({ notes: state.notes, selected: state.selected }));
-  const snapshot = JSON.parse(from.pop());
-  state.notes = snapshot.notes;
-  state.selected = Math.min(snapshot.selected, state.notes.length - 1);
+  to.push(snapshot());
+  const saved = JSON.parse(from.pop());
+  state.notes = saved.notes;
+  state.chords = saved.chords ?? [];
+  state.selected = Math.min(saved.selected, state.notes.length - 1);
+  state.selectedChord = Math.min(saved.selectedChord ?? -1, state.chords.length - 1);
   state.edited = true;
   inspect();
   draw();
@@ -334,9 +352,19 @@ function restore(from, to) {
 const selected = () => state.notes[state.selected];
 
 function inspect() {
-  const n = selected();
-  $('inspector-empty').hidden = !!n;
+  const n = selected(), c = state.chords[state.selectedChord];
+  $('inspector-empty').hidden = !!(n || c);
   $('inspector-fields').hidden = !n;
+  $('chord-fields').hidden = !c;
+  if (c) {
+    const parts = parseChord(c.name);
+    $('chord-name').textContent = c.name;
+    $('c-root').value = parts.root;
+    $('c-quality').value = parts.quality;
+    $('c-bass').value = parts.bass ?? '';
+    $('c-tick').value = c.t;
+    $('c-length').value = c.d;
+  }
   if (!n) return;
   $('note-name').textContent = noteName(midiOf(n.s, n.f));
   $('f-string').value = n.s;
@@ -391,6 +419,91 @@ function addNote(t, s) {
   draw();
 }
 
+// ---------------------------------------------------------------- chords
+
+const QUALITY_LABELS = {
+  '': 'Dur', m: 'Moll', 7: '7', maj7: 'maj7', m7: 'm7', 6: '6', m6: 'm6', dim: 'dim (vermindert)',
+  aug: 'aug (übermäßig)', sus2: 'sus2', sus4: 'sus4', add9: 'add9', 9: '9', 5: '5 (Powerchord)',
+};
+for (const [i, name] of ROOT_NAMES.entries()) {
+  $('c-root').add(new Option(name, i));
+  $('c-bass').add(new Option(name, i));
+}
+$('c-bass').add(new Option('wie Grundton', ''), 0);
+for (const q of Object.keys(CHORD_QUALITIES)) $('c-quality').add(new Option(QUALITY_LABELS[q] ?? q, q));
+
+const selectedChord = () => state.chords[state.selectedChord];
+const chordField = (id, apply) => $(id).addEventListener('change', () => {
+  const c = selectedChord();
+  if (c) change(() => apply(c, $(id).value));
+});
+const rename = (c) => {
+  const bass = $('c-bass').value;
+  c.name = chordName(+$('c-root').value, $('c-quality').value, bass === '' ? null : +bass);
+};
+chordField('c-root', rename);
+chordField('c-quality', rename);
+chordField('c-bass', rename);
+chordField('c-tick', (c, v) => { c.t = Math.max(0, Math.round(+v || 0)); });
+chordField('c-length', (c, v) => { c.d = Math.max(1, Math.round(+v || 1)); });
+$('c-delete').addEventListener('click', () => deleteChord());
+
+function deleteChord() {
+  if (!selectedChord()) return;
+  change(() => { state.chords.splice(state.selectedChord, 1); });
+  state.selectedChord = -1;
+  inspect();
+  draw();
+}
+
+/** A new chord on the beat at [tick]: as long as a bar, or up to the next
+ * chord; the chord before it, or the key's tonic, to start from. */
+function addChord(tick) {
+  const { ticksPerBeat, beatsPerBar } = state.meta;
+  const t = Math.floor(tick / ticksPerBeat) * ticksPerBeat;
+  if (state.chords.some((c) => c.t <= t && t < c.t + c.d)) return;
+  const next = state.chords.find((c) => c.t > t);
+  const before = [...state.chords].reverse().find((c) => c.t < t);
+  const suggested = suggestChords(state.notes, state.meta).find((c) => c.t <= t && t < c.t + c.d);
+  const chord = {
+    t,
+    d: Math.max(1, Math.min(ticksPerBeat * beatsPerBar, (next?.t ?? Infinity) - t)),
+    name: suggested?.name ?? before?.name ?? 'C',
+  };
+  change(() => { state.chords.push(chord); });
+  state.selected = -1;
+  state.selectedChord = state.chords.indexOf(chord);
+  inspect();
+  draw();
+}
+
+$('suggest-chords').addEventListener('click', () => {
+  if (!state.notes.length) return;
+  if (state.chords.length && !confirm('Die vorhandenen Akkorde werden durch Vorschläge ersetzt. Weiter?')) return;
+  change(() => { state.chords = suggestChords(state.notes, state.meta); });
+  state.selectedChord = -1;
+  inspect();
+  draw();
+  setStatus(`${state.chords.length} Akkorde vorgeschlagen, bitte anhören und anpassen`);
+});
+
+document.addEventListener('keydown', (e) => {
+  if ($('editor').hidden || e.target.matches('input, select')) return;
+  const c = selectedChord();
+  if (c && !(e.ctrlKey || e.metaKey) && e.key !== ' ' && e.key !== 'Tab') {
+    const beat = state.meta.ticksPerBeat;
+    const edits = {
+      ArrowLeft: () => { c.t = Math.max(0, c.t - beat); },
+      ArrowRight: () => { c.t += beat; },
+      '[': () => { c.d = Math.max(1, c.d - beat); },
+      ']': () => { c.d += beat; },
+    };
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteChord(); }
+    else if (edits[e.key]) { e.preventDefault(); change(edits[e.key]); reveal(c.t); }
+    e.stopImmediatePropagation();
+  }
+}, true);
+
 document.addEventListener('keydown', (e) => {
   if ($('editor').hidden || e.target.matches('input, select')) return;
   const n = selected();
@@ -402,6 +515,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (!state.notes.length) return;
     state.selected = (state.selected + (e.shiftKey ? -1 : 1) + state.notes.length) % state.notes.length;
+    state.selectedChord = -1;
     reveal(selected().t);
     inspect();
     return draw();
@@ -428,7 +542,7 @@ document.addEventListener('keydown', (e) => {
 
 const canvas = $('canvas');
 const g = canvas.getContext('2d');
-const layout = { left: 34, wave: 64, top: 96, gap: 34 };
+const layout = { left: 34, wave: 64, chords: 100, top: 136, gap: 34 };
 const stringY = (s) => layout.top + (s - 1) * layout.gap;
 const x = (tick) => layout.left + (tick - state.scroll) * state.zoom;
 const tickAt = (px) => (px - layout.left) / state.zoom + state.scroll;
@@ -444,7 +558,10 @@ function resize() {
 }
 addEventListener('resize', () => { if (!$('editor').hidden) resize(); });
 
-const lastTick = () => state.notes.reduce((m, n) => Math.max(m, n.t + n.d), 0) + state.meta.ticksPerBeat * state.meta.beatsPerBar;
+const lastTick = () => Math.max(
+  state.notes.reduce((m, n) => Math.max(m, n.t + n.d), 0),
+  state.chords.reduce((m, c) => Math.max(m, c.t + c.d), 0),
+) + state.meta.ticksPerBeat * state.meta.beatsPerBar;
 const visibleTicks = () => (canvas.clientWidth - layout.left) / state.zoom;
 
 function updateScrollbar() {
@@ -524,6 +641,31 @@ function draw() {
     }
   }
 
+  // The chord lane.
+  g.fillStyle = '#d0c5af';
+  g.font = 'bold 11px system-ui';
+  g.fillText('Akk.', 2, layout.chords + 4);
+  g.strokeStyle = 'rgba(255,255,255,.08)';
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(layout.left - 6, layout.chords);
+  g.lineTo(w, layout.chords);
+  g.stroke();
+  state.chords.forEach((c, i) => {
+    if (c.t + c.d < first - 1 || c.t > last + 1) return;
+    const x0 = x(c.t) + 1, x1 = Math.max(x(c.t + c.d) - 2, x0 + 30);
+    const chosen = i === state.selectedChord;
+    g.fillStyle = chosen ? 'rgba(242,202,80,.3)' : 'rgba(242,202,80,.12)';
+    roundRect(x0, layout.chords - 13, x1 - x0, 26, 8);
+    g.fill();
+    g.strokeStyle = chosen ? '#f2ca50' : 'rgba(242,202,80,.55)';
+    g.lineWidth = chosen ? 2.5 : 1;
+    g.stroke();
+    g.fillStyle = '#f2ca50';
+    g.font = 'bold 14px system-ui';
+    g.fillText(c.name, x0 + 7, layout.chords + 5);
+  });
+
   // Strings.
   for (let s = 1; s <= 6; s++) {
     g.strokeStyle = s >= 4 ? '#b8925a' : '#9a9a9a';
@@ -580,13 +722,21 @@ let drag = null;
 canvas.addEventListener('pointerdown', (e) => {
   canvas.focus();
   const { px, py } = point(e);
-  const hit = noteAt(px, py);
+  const hit = noteAt(px, py), chordHit = chordAt(px, py);
   if (hit >= 0) {
     state.selected = hit;
+    state.selectedChord = -1;
     drag = { startTick: tickAt(px), note: state.notes[hit], from: state.notes[hit].t, moved: false };
+    canvas.setPointerCapture(e.pointerId);
+  } else if (chordHit >= 0) {
+    state.selectedChord = chordHit;
+    state.selected = -1;
+    const chord = state.chords[chordHit];
+    drag = { startTick: tickAt(px), note: chord, from: chord.t, moved: false, chord: true };
     canvas.setPointerCapture(e.pointerId);
   } else {
     state.selected = -1;
+    state.selectedChord = -1;
     state.playhead = Math.max(0, Math.round(tickAt(px)));
   }
   inspect();
@@ -594,10 +744,12 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!drag) return;
-  const t = Math.max(0, drag.from + Math.round(tickAt(point(e).px) - drag.startTick));
+  // Chords move by whole beats, notes by steps.
+  const step = drag.chord ? state.meta.ticksPerBeat : 1;
+  const t = Math.max(0, drag.from + step * Math.round((tickAt(point(e).px) - drag.startTick) / step));
   if (t !== drag.note.t) {
     if (!drag.moved) {
-      undo.push(JSON.stringify({ notes: state.notes, selected: state.selected }));
+      undo.push(snapshot());
       redo.length = 0;
       drag.moved = true;
     }
@@ -606,7 +758,13 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 canvas.addEventListener('pointerup', () => {
-  if (drag?.moved) {
+  if (drag?.moved && drag.chord) {
+    state.chords.sort((a, b) => a.t - b.t);
+    state.selectedChord = state.chords.indexOf(drag.note);
+    state.edited = true;
+    inspect();
+    draw();
+  } else if (drag?.moved) {
     const note = drag.note;
     setNotes(state.notes);
     state.selected = state.notes.indexOf(note);
@@ -618,7 +776,8 @@ canvas.addEventListener('pointerup', () => {
 });
 canvas.addEventListener('dblclick', (e) => {
   const { px, py } = point(e);
-  if (noteAt(px, py) >= 0) return;
+  if (noteAt(px, py) >= 0 || chordAt(px, py) >= 0) return;
+  if (Math.abs(py - layout.chords) <= 15) return addChord(Math.max(0, tickAt(px)));
   const s = Math.round((py - layout.top) / layout.gap) + 1;
   if (s >= 1 && s <= 6) addNote(Math.max(0, Math.round(tickAt(px) - 0.5)), s);
 });
@@ -626,6 +785,10 @@ canvas.addEventListener('dblclick', (e) => {
 function point(e) {
   const r = canvas.getBoundingClientRect();
   return { px: e.clientX - r.left, py: e.clientY - r.top };
+}
+function chordAt(px, py) {
+  if (Math.abs(py - layout.chords) > 15) return -1;
+  return state.chords.findIndex((c) => px >= x(c.t) && px <= Math.max(x(c.t + c.d) - 2, x(c.t) + 30));
 }
 function noteAt(px, py) {
   for (let i = state.notes.length - 1; i >= 0; i--) {
@@ -692,6 +855,32 @@ function togglePlay() {
       src.connect(gain).connect(c.destination);
       src.start(Math.max(start, when), Math.max(0, start - when));
       sources.push(src);
+    }
+  }
+  if ($('hear-chords').checked) {
+    for (const ch of state.chords) {
+      if (ch.t + ch.d <= state.playhead) continue;
+      const parts = parseChord(ch.name);
+      if (!parts) continue;
+      const when = Math.max(start, start + (ch.t - state.playhead) * tickSeconds() / speed);
+      const end = start + (ch.t + ch.d - state.playhead) * tickSeconds() / speed;
+      // Soft keys between G3 and F#4 and the bass note below, as in the app.
+      const tones = chordTones(parts).map((pc) => 55 + ((pc - 55) % 12 + 12) % 12);
+      const bass = 40 + (((parts.bass ?? parts.root) - 40) % 12 + 12) % 12;
+      for (const [midi, level] of [...tones.map((m) => [m, 0.07]), [bass, 0.12]]) {
+        const osc = c.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.value = hz(midi);
+        const gain = c.createGain();
+        gain.gain.setValueAtTime(0, when);
+        gain.gain.linearRampToValueAtTime(level, when + 0.01);
+        gain.gain.setTargetAtTime(level * 0.5, when + 0.02, 0.4);
+        gain.gain.setTargetAtTime(0, end, 0.05);
+        osc.connect(gain).connect(c.destination);
+        osc.start(when);
+        osc.stop(end + 0.4);
+        sources.push(osc);
+      }
     }
   }
   state.playing = { sources, start, from: state.playhead, speed };
