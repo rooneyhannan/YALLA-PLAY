@@ -42,6 +42,9 @@ code { color: var(--gold); }
 .drop.over { border-color: var(--gold); }
 .hint { color: var(--cream); font-size: 13px; }
 .progress { margin-top: 18px; }
+.progress-row { display: flex; align-items: center; gap: 12px; }
+.progress-row p { margin: 0 0 8px; flex: 1; }
+.time { color: var(--cream); font-variant-numeric: tabular-nums; }
 .bar { height: 8px; border-radius: 4px; background: var(--raised); overflow: hidden; }
 #progress-bar { height: 100%; width: 0; background: var(--gold); transition: width .2s; }
 main { margin-top: 16px; display: grid; gap: 12px; }
