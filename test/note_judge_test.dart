@@ -116,6 +116,25 @@ void main() {
     });
   });
 
+  test('practice waits: nothing expires, late plucks still count', () {
+    final judge = NoteJudge(
+      starts: [6, 12],
+      frequencies: [440, 330],
+      patient: true,
+    );
+    expect(judge.expire(100, ticksPerSecond: 6), isEmpty);
+    expect(judge.firstOpen, 0);
+    // The second note cannot be played before the first.
+    expect(judge.pluck(12, 330, ticksPerSecond: 6), isNull);
+    // Played two seconds after it was due: late, but counted.
+    expect(judge.pluck(18, 440, ticksPerSecond: 6), 0);
+    expect(judge.verdicts[0], Verdict.late);
+    expect(judge.firstOpen, 1);
+    expect(judge.pluck(12.2, 330, ticksPerSecond: 6), 1);
+    expect(judge.verdicts[1], Verdict.perfect);
+    expect(judge.firstOpen, isNull);
+  });
+
   testWidgets('playing along into the microphone scores the notes', (
     tester,
   ) async {
@@ -152,6 +171,59 @@ void main() {
     expect(
       tester.widget<Text>(find.byKey(const ValueKey('game-multiplier'))).data,
       '×1',
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('practice holds the song at a note until it is played', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final engine = FakeTunerEngine();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GameScreen(song: songs.first, engineFactory: () => engine),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('game-start-practice')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 3100));
+
+    double progress() => tester
+        .widget<LinearProgressIndicator>(
+          find.byKey(const ValueKey('session-progress')),
+        )
+        .value!;
+    // The first note is due one second in; stay silent well past it.
+    await tester.pump(const Duration(seconds: 2));
+    final held = progress();
+    expect(find.byKey(const ValueKey('game-waiting')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(progress(), held);
+
+    // A wrong note does not release it.
+    engine.onPitch!(null, .001);
+    engine.onPitch!(noteFrequency(rawSongData.first) * 1.06, .05);
+    engine.onPitch!(noteFrequency(rawSongData.first) * 1.06, .05);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(progress(), held);
+
+    // The right note does, and it counts as late.
+    await tester.pump(const Duration(milliseconds: 500));
+    engine.onPitch!(null, .001);
+    engine.onPitch!(noteFrequency(rawSongData.first), .05);
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(progress(), greaterThan(held));
+    expect(find.byKey(const ValueKey('game-waiting')), findsNothing);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('game-practice-count')))
+          .data,
+      '1 / ${rawSongData.length}',
     );
     await tester.pumpWidget(const SizedBox());
   });

@@ -59,8 +59,21 @@ class NoteJudge {
 
   int score = 0, streak = 0, bestStreak = 0;
 
-  NoteJudge({required this.starts, required this.frequencies})
-    : verdicts = List.filled(starts.length, null);
+  /// For practice: the song waits at each note until it is played, so no
+  /// note is ever missed and one played after its window counts as late.
+  bool patient;
+
+  NoteJudge({
+    required this.starts,
+    required this.frequencies,
+    this.patient = false,
+  }) : verdicts = List.filled(starts.length, null);
+
+  /// The first note not judged yet, or null when all are.
+  int? get firstOpen {
+    final i = verdicts.indexOf(null);
+    return i < 0 ? null : i;
+  }
 
   /// ×1, rising by one every 8 notes in a row, up to ×4.
   int get multiplier => math.min(4, 1 + streak ~/ 8);
@@ -101,9 +114,13 @@ class NoteJudge {
     for (var i = 0; i < starts.length; i++) {
       if (verdicts[i] != null) continue;
       final offset = (tick - starts[i]) / ticksPerSecond;
-      if (offset > lateWindow) continue;
+      if (offset > lateWindow && !patient) continue;
       if (offset < -earlyWindow) break;
-      if (!sounds(frequencies[i])) continue;
+      if (!sounds(frequencies[i])) {
+        // While practising, the notes are played strictly in order.
+        if (patient) break;
+        continue;
+      }
       final verdict = offset.abs() <= perfectWindow
           ? Verdict.perfect
           : offset < 0
@@ -123,6 +140,7 @@ class NoteJudge {
   /// returns them.
   List<int> expire(double tick, {required double ticksPerSecond}) {
     final missed = <int>[];
+    if (patient) return missed;
     for (var i = 0; i < starts.length; i++) {
       if (verdicts[i] != null) continue;
       if ((tick - starts[i]) / ticksPerSecond <= lateWindow) break;

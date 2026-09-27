@@ -26,15 +26,27 @@ class FeedbackMark {
 }
 
 /// One color per string, 0 = high E … 5 = low E, picked to sit on the
-/// app's dark background next to its gold.
+/// app's dark background; green and yellow are left for the verdicts.
 const stringColors = <Color>[
-  Color(0xFFF2CA50),
-  Color(0xFFFF8A5B),
-  Color(0xFFE8609A),
+  Color(0xFFFF5C6C),
+  Color(0xFFFF9A3D),
+  Color(0xFFE860C0),
   Color(0xFFA27BFF),
-  Color(0xFF4FB3FF),
-  Color(0xFF3CD98A),
+  Color(0xFF4F8BFF),
+  Color(0xFF3ED8E8),
 ];
+
+/// Colors a note takes once judged: played on time, played early or late,
+/// and not played at all.
+const perfectColor = Color(0xFF35E26B),
+    offTimeColor = Color(0xFFFFE030),
+    missedColor = Color(0xFF5A5E5C);
+
+Color verdictColor(Verdict verdict) => switch (verdict) {
+  Verdict.perfect => perfectColor,
+  Verdict.early || Verdict.late => offTimeColor,
+  Verdict.missed => missedColor,
+};
 
 /// Perspective of the board: a plane seen from above and in front, so it
 /// runs away from the viewer. Positions on it are `u`, pixels along time
@@ -72,8 +84,12 @@ class HighwayPainter extends CustomPainter {
   /// Verdict per note while the microphone scores, else null.
   final List<Verdict?>? verdicts;
   final List<FeedbackMark> feedback;
+
+  /// The note the practice mode waits at, which pulses.
+  final int? waiting;
   HighwayPainter({
     this.verdicts,
+    this.waiting,
     this.feedback = const [],
     required this.notes,
     required this.ball,
@@ -287,7 +303,7 @@ class HighwayPainter extends CustomPainter {
     for (var string = 0; string < 6; string++) {
       for (var i = 0; i < notes.length; i++) {
         if (notes[i].note.s - 1 != string) continue;
-        _note(canvas, size, notes[i], string, verdicts?[i]);
+        _note(canvas, size, notes[i], string, verdicts?[i], i == waiting);
       }
     }
   }
@@ -298,6 +314,7 @@ class HighwayPainter extends CustomPainter {
     GameNote gameNote,
     int string,
     Verdict? verdict,
+    bool waiting,
   ) {
     final start = gameNote.absoluteTime + leadTicks;
     final u0 = _u(start);
@@ -308,12 +325,14 @@ class HighwayPainter extends CustomPainter {
     if (b.dx < -40 || a.dx > size.width + 40) return;
     final height = 36 * scale;
     final hit = verdict != null && verdict != Verdict.missed;
-    // Missed notes turn grey; hit ones keep shining after they pass.
-    final color = verdict == Verdict.missed
-        ? const Color(0xFF5A5E5C)
-        : stringColors[string];
+    // Judged notes take the color of their verdict; hit ones keep shining
+    // after they pass.
+    final color = verdict == null
+        ? stringColors[string]
+        : verdictColor(verdict);
     final past = u1 < _hitU;
-    final playing = hit || (u0 <= _hitU && _hitU <= u1 + 6 && verdicts == null);
+    final playing =
+        hit || waiting || (u0 <= _hitU && _hitU <= u1 + 6 && verdicts == null);
     final alpha = past && !hit ? .3 : 1.0;
     final pill = RRect.fromLTRBR(
       a.dx,
@@ -330,10 +349,11 @@ class HighwayPainter extends CustomPainter {
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * scale),
     );
     if (playing) {
+      final glow = waiting ? .35 + .35 * math.sin(seconds * 7) : .6;
       canvas.drawRRect(
-        pill.inflate(4 * scale),
+        pill.inflate((waiting ? 7 : 4) * scale),
         Paint()
-          ..color = color.withValues(alpha: .6)
+          ..color = (waiting ? Colors.white : color).withValues(alpha: glow)
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, 12 * scale),
       );
     }
@@ -356,6 +376,10 @@ class HighwayPainter extends CustomPainter {
           [0, .45, 1],
         ),
     );
+    if (verdict == Verdict.perfect) {
+      _check(canvas, a + Offset(height / 2, 0), height * .26);
+      return;
+    }
     final label = TextPainter(
       text: TextSpan(
         text: '${gameNote.note.f}',
@@ -372,6 +396,23 @@ class HighwayPainter extends CustomPainter {
     label.paint(
       canvas,
       Offset(a.dx + height / 2 - label.width / 2, a.dy - label.height / 2),
+    );
+  }
+
+  /// A check mark centered on [center], for a note played right.
+  void _check(Canvas canvas, Offset center, double size) {
+    final path = Path()
+      ..moveTo(center.dx - size, center.dy)
+      ..lineTo(center.dx - size * .3, center.dy + size * .7)
+      ..lineTo(center.dx + size, center.dy - size * .7);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size * .45
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white,
     );
   }
 
@@ -476,11 +517,9 @@ class HighwayPainter extends CustomPainter {
       if (age < 0 || age > .9) continue;
       final v = BoardProjection.stringDepth(mark.string.toDouble());
       final at = _board.project(_hitU, v, lift: 44 + age * 60);
-      final color = switch (mark.verdict) {
-        Verdict.perfect => AppTheme.gold,
-        Verdict.early || Verdict.late => const Color(0xFFFF8A5B),
-        Verdict.missed => const Color(0xFF8A8F8C),
-      };
+      final color = mark.verdict == Verdict.missed
+          ? const Color(0xFF8A8F8C)
+          : verdictColor(mark.verdict);
       final text = TextPainter(
         text: TextSpan(
           text: _verdictText[mark.verdict],
@@ -502,7 +541,8 @@ class HighwayPainter extends CustomPainter {
   bool shouldRepaint(HighwayPainter old) =>
       old.currentTick != currentTick ||
       old.seconds != seconds ||
-      old.feedback.length != feedback.length;
+      old.feedback.length != feedback.length ||
+      old.waiting != waiting;
 }
 
 /// The whole song in one strip: colored dashes per string and the part
@@ -510,7 +550,11 @@ class HighwayPainter extends CustomPainter {
 class SongOverviewPainter extends CustomPainter {
   final List<GameNote> notes;
   final double progress, totalTicks;
+
+  /// Verdict per note while the microphone scores, else null.
+  final List<Verdict?>? verdicts;
   const SongOverviewPainter({
+    this.verdicts,
     required this.notes,
     required this.progress,
     required this.totalTicks,
@@ -527,8 +571,10 @@ class SongOverviewPainter extends CustomPainter {
       ..save()
       ..clipRRect(rect);
     final lane = (size.height - 8) / 6;
-    for (final n in notes) {
+    for (var i = 0; i < notes.length; i++) {
+      final n = notes[i];
       final string = n.note.s - 1;
+      final verdict = verdicts?[i];
       final x0 = n.absoluteTime / totalTicks * size.width;
       final x1 = (n.absoluteTime + n.note.d) / totalTicks * size.width;
       final played = x0 <= progress * size.width;
@@ -536,7 +582,9 @@ class SongOverviewPainter extends CustomPainter {
         Offset(x0, 4 + lane * (string + .5)),
         Offset(math.max(x1 - 1, x0 + 1.5), 4 + lane * (string + .5)),
         Paint()
-          ..color = stringColors[string].withValues(alpha: played ? .35 : .9)
+          ..color = verdict != null
+              ? verdictColor(verdict)
+              : stringColors[string].withValues(alpha: played ? .35 : .9)
           ..strokeWidth = math.max(1.5, lane * .7)
           ..strokeCap = StrokeCap.round,
       );
