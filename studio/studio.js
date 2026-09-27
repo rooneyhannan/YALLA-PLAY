@@ -33,8 +33,17 @@ const tickSeconds = () => 60 / state.meta.bpm / state.meta.ticksPerBeat;
 
 // ---------------------------------------------------------------- files
 
-$('open-audio').addEventListener('change', (e) => e.target.files[0] && openAudio(e.target.files[0]));
-$('open-json').addEventListener('change', (e) => e.target.files[0] && openJson(e.target.files[0]));
+// Emptied after each choice, so choosing the same file again opens it again.
+$('open-audio').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) openAudio(file);
+});
+$('open-json').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) openJson(file);
+});
 const drop = $('drop');
 for (const type of ['dragenter', 'dragover']) {
   document.addEventListener(type, (e) => { e.preventDefault(); drop.classList.add('over'); });
@@ -53,10 +62,16 @@ async function openAudio(file) {
   if (state.edited && !confirm('Die aktuellen Änderungen gehen verloren. Weiter?')) return;
   showProgress('Lese die Aufnahme …', 0);
   try {
-    const decoded = await audioContext().decodeAudioData(await file.arrayBuffer());
+    let decoded;
+    try {
+      decoded = await audioContext().decodeAudioData(await file.arrayBuffer());
+    } catch {
+      throw new Error('Dieses Audioformat kann dein Browser nicht lesen. Versuche MP3 oder WAV, oder einen anderen Browser (Chrome, Edge, Safari).');
+    }
     state.audio = decoded;
-    showProgress('Lade die Notenerkennung …', 0.02);
-    const detected = await transcribe(decoded, (p) => showProgress(`Erkenne Noten … ${Math.round(p * 100)} %`, p));
+    const minutes = `${Math.floor(decoded.duration / 60)}:${String(Math.round(decoded.duration % 60)).padStart(2, '0')}`;
+    const detected = await transcribe(decoded, (p, engine) =>
+      showProgress(`Erkenne Noten … ${Math.round(p * 100)} % · Aufnahme ${minutes} min · ${engine}`, p));
     state.detected = detected;
     const melody = melodyOf(detected);
     if (!melody.length) throw new Error('In der Aufnahme wurden keine Gitarrennoten gefunden.');
@@ -69,9 +84,12 @@ async function openAudio(file) {
     state.edited = false;
     openEditor(`${state.notes.length} Noten erkannt · Tempo ${tempo.bpm} BPM`);
   } catch (error) {
-    console.error(error);
     hideProgress();
+    if (error.cancelled) return;
+    console.error(error);
     alert('Die Aufnahme konnte nicht ausgewertet werden:\n' + (error.message ?? error));
+  } finally {
+    cancelRecognition = null;
   }
 }
 
@@ -93,8 +111,23 @@ async function openJson(file) {
   }
 }
 
-/** Runs Basic Pitch on the recording, mono at 22 050 Hz as it expects, in
- * a worker so the page keeps responding. */
+/** Whether the page can use the graphics card (WebGL), which runs the
+ * note recognition many times faster than the processor. */
+function hasWebGL() {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
+/** Set while a recognition runs: stops it. */
+let cancelRecognition = null;
+
+/** Runs Basic Pitch on the recording, mono at 22 050 Hz as it expects: on
+ * the graphics card when there is one, else in a worker on the processor,
+ * so the page keeps responding either way. */
 async function transcribe(decoded, progress) {
   const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 22050), 22050);
   const source = offline.createBufferSource();
@@ -102,16 +135,55 @@ async function transcribe(decoded, progress) {
   source.connect(offline.destination);
   source.start();
   const samples = (await offline.startRendering()).getChannelData(0);
+  if (hasWebGL() && !new URLSearchParams(location.search).has('cpu')) {
+    try {
+      return await transcribeHere(samples, (p) => progress(p, 'Grafikkarte'));
+    } catch (error) {
+      if (error.cancelled) throw error;
+      console.warn('Graphics card failed, using the processor', error);
+    }
+  }
+  return transcribeInWorker(samples, (p) => progress(p, 'Prozessor (langsamer)'));
+}
+
+async function transcribeHere(samples, progress) {
+  progress(0);
+  const { BasicPitch, outputToNotesPoly, addPitchBendsToNoteEvents, noteFramesToTime, setBackend, getBackend } =
+    await import('./vendor/basic-pitch.js');
+  // A browser can offer WebGL that TensorFlow still cannot use; it would
+  // then quietly compute on the processor here and freeze the page.
+  if (!(await setBackend('webgl')) || getBackend() !== 'webgl') {
+    throw new Error('TensorFlow cannot use this graphics card');
+  }
+  let cancelled = false;
+  cancelRecognition = () => { cancelled = true; };
+  const model = new BasicPitch(new URL('./vendor/model/model.json', import.meta.url).href);
+  const frames = [], onsets = [], contours = [];
+  await model.evaluateModel(samples, (f, o, c) => {
+    if (cancelled) throw Object.assign(new Error('Abgebrochen'), { cancelled: true });
+    frames.push(...f);
+    onsets.push(...o);
+    contours.push(...c);
+  }, progress);
+  if (cancelled) throw Object.assign(new Error('Abgebrochen'), { cancelled: true });
+  return noteFramesToTime(addPitchBendsToNoteEvents(contours, outputToNotesPoly(frames, onsets, 0.5, 0.3, 11)))
+    .map((n) => ({ start: n.startTimeSeconds, duration: n.durationSeconds, midi: n.pitchMidi, amplitude: n.amplitude }));
+}
+
+async function transcribeInWorker(samples, progress) {
+  progress(0);
   const worker = new Worker(new URL('./transcribe.worker.js', import.meta.url), { type: 'module' });
   try {
     return await new Promise((resolve, reject) => {
+      cancelRecognition = () => reject(Object.assign(new Error('Abgebrochen'), { cancelled: true }));
       worker.onmessage = ({ data }) => {
         if (data.progress != null) progress(data.progress);
         else if (data.error) reject(new Error(data.error));
         else resolve(data.notes);
       };
       worker.onerror = (e) => reject(new Error(e.message || 'Die Notenerkennung ist abgestürzt.'));
-      worker.postMessage({ samples }, [samples.buffer]);
+      // A copy: the recording's own buffer stays with the page.
+      worker.postMessage({ samples: samples.slice() });
     });
   } finally {
     worker.terminate();
@@ -137,12 +209,41 @@ window.yallaStudio = { state, exportJson }; // for automated tests
 
 // ---------------------------------------------------------------- page
 
+/** When the current step started, for the running clock. */
+let progressSince = 0, progressClock = null;
+
 function showProgress(text, fraction) {
+  if ($('progress').hidden) {
+    progressSince = Date.now();
+    progressClock = setInterval(tickProgress, 1000);
+  }
   $('progress').hidden = false;
   $('progress-text').textContent = text;
-  $('progress-bar').style.width = `${Math.round(fraction * 100)}%`;
+  $('progress-bar').style.width = `${Math.max(2, Math.round(fraction * 100))}%`;
+  $('progress-bar').dataset.fraction = fraction;
+  tickProgress();
 }
-const hideProgress = () => { $('progress').hidden = true; };
+function tickProgress() {
+  const seconds = Math.round((Date.now() - progressSince) / 1000);
+  $('progress-time').textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  // Tell a slow start from a hang.
+  $('progress-hint').hidden = !(seconds > 20 && +$('progress-bar').dataset.fraction < 0.05);
+}
+const hideProgress = () => {
+  $('progress').hidden = true;
+  clearInterval(progressClock);
+};
+$('cancel').addEventListener('click', () => {
+  cancelRecognition?.();
+  hideProgress();
+  setStatus('Abgebrochen');
+});
+addEventListener('unhandledrejection', (e) => {
+  if (!$('progress').hidden && !e.reason?.cancelled) {
+    hideProgress();
+    alert('Fehler bei der Notenerkennung:\n' + (e.reason?.message ?? e.reason));
+  }
+});
 
 function openEditor(status) {
   hideProgress();

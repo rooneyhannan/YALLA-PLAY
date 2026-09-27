@@ -23,11 +23,18 @@
   <p><strong>Aufnahme hierher ziehen</strong> (MP3, WAV, M4A …) oder oben öffnen.</p>
   <p class="hint">Am besten: nur die Gitarre, eine Melodie, einzeln gespielte Noten, gleichmäßiges Tempo.
     Die Aufnahme bleibt auf deinem Rechner, nichts wird hochgeladen.</p>
+  <p class="hint">Gedacht für PC oder Laptop mit Chrome, Edge, Safari oder Firefox. Auf dem Handy ist die Erkennung sehr langsam.</p>
 </section>
 
 <section id="progress" class="progress" hidden>
-  <p id="progress-text">Analysiere …</p>
+  <div class="progress-row">
+    <p id="progress-text">Analysiere …</p>
+    <span id="progress-time" class="time">0:00</span>
+    <button id="cancel" class="button small">Abbrechen</button>
+  </div>
   <div class="bar"><div id="progress-bar"></div></div>
+  <p id="progress-hint" class="hint" hidden>Das dauert ohne Grafikkarte und bei langen Aufnahmen eine Weile, die Anzeige springt erst nach dem ersten Abschnitt.
+    Tipp: erst mit einer kurzen Aufnahme (unter 1 Minute) am PC oder Laptop testen.</p>
 </section>
 
 <main id="editor" hidden>
