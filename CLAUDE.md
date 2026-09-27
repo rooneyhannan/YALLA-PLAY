@@ -17,3 +17,12 @@
 - The script stamps the build (shown in the tuner footer) and versions the
   loaded scripts so a reload shows the new release despite GitHub Pages caching.
 - Restore generated noise before committing: `git checkout -- build android ios`.
+
+## Songs and Yalla Studio
+
+- Songs are `yalla-song/1` JSON files in `assets/songs/` (see `docs/song-format.md`);
+  a song in `lib/core/models/song.dart` plays its file through `chart: '<id>'`.
+- `studio/` is a separate static page (served at `/YALLA-PLAY/studio/`): recording
+  → Basic Pitch (vendored in `studio/vendor/`) → tab → editor → JSON.
+  Its logic lives in `studio/transcribe.js`; test it with `node --test 'studio/test/*.test.mjs'`.
+

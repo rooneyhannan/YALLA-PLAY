@@ -11,7 +11,7 @@ import '../data/arrangement.dart';
 import '../data/ball_path.dart';
 import '../data/fingering.dart';
 import '../data/note_judge.dart';
-import '../data/song_data.dart';
+import '../data/song_chart.dart';
 import '../data/sound_engine.dart';
 import '../data/sound_scheduler.dart';
 import '../data/synth.dart';
@@ -26,11 +26,13 @@ enum GameMode { play, practice }
 
 class GameScreen extends StatefulWidget {
   final Song song;
+  final SongChart chart;
   final TunerEngine Function() engineFactory;
   final SoundEngine Function() soundFactory;
   const GameScreen({
     super.key,
     required this.song,
+    required this.chart,
     this.engineFactory = createTunerEngine,
     this.soundFactory = createSoundEngine,
   });
@@ -41,7 +43,10 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const _background = Color(0xFF101414);
-  static const _leadTicks = 6.0, _countdownSeconds = 3.0;
+  static const _countdownSeconds = 3.0;
+
+  /// A beat and a half before the first note, to see it coming.
+  late final double _leadTicks = widget.chart.ticksPerBeat * 1.5;
 
   /// Time from a pluck to its pitch reaching us: one analysis window.
   static const _micLatency = .08;
@@ -85,7 +90,7 @@ class _GameScreenState extends State<GameScreen>
   num _sampleRate = 48000;
   double get _end => _notes.last.absoluteTime + _notes.last.note.d + _leadTicks;
   bool get _finished => _currentTick >= _end;
-  double get _ticksPerSecond => 6 * _speed;
+  double get _ticksPerSecond => widget.chart.ticksPerSecond * _speed;
   bool get _practicing => _listening && _mode == GameMode.practice;
 
   /// Song time for judging: stands still at a note practice waits at, so
@@ -102,16 +107,16 @@ class _GameScreenState extends State<GameScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    var time = 0.0;
-    final fingers = assignFingers(rawSongData);
+    final chart = widget.chart.notes;
+    // Fingers the chart leaves open follow the one-finger-per-fret rule.
+    final fingers = assignFingers([for (final n in chart) n.note]);
     _notes = [
-      for (var i = 0; i < rawSongData.length; i++)
-        (() {
-          final note = rawSongData[i];
-          final result = GameNote(note, time, finger: fingers[i]);
-          time += note.d;
-          return result;
-        })(),
+      for (var i = 0; i < chart.length; i++)
+        GameNote(
+          chart[i].note,
+          chart[i].tick.toDouble(),
+          finger: chart[i].finger ?? fingers[i],
+        ),
     ];
     _ball = BallPath(
       landings: [for (final n in _notes) n.absoluteTime + _leadTicks],
@@ -133,6 +138,10 @@ class _GameScreenState extends State<GameScreen>
         ],
         firstBeat: _leadTicks,
         end: _end,
+        beatTicks: widget.chart.ticksPerBeat.toDouble(),
+        barTicks: (widget.chart.ticksPerBeat * widget.chart.beatsPerBar)
+            .toDouble(),
+        ticksPerSecond: widget.chart.ticksPerSecond,
       ).events,
     );
     _ticker = createTicker(_onTick)..start();
@@ -406,6 +415,11 @@ class _GameScreenState extends State<GameScreen>
                           ball: _ball,
                           currentTick: _currentTick,
                           leadTicks: _leadTicks,
+                          beatTicks: widget.chart.ticksPerBeat.toDouble(),
+                          barTicks:
+                              (widget.chart.ticksPerBeat *
+                                      widget.chart.beatsPerBar)
+                                  .toDouble(),
                           totalTicks: _end,
                           seconds: _seconds,
                           background: _background,

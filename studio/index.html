@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yalla Studio</title>
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<header>
+  <h1>Yalla <span>Studio</span></h1>
+  <p class="lead">Aufnahme → Noten → Tabulatur → <code>JSON</code> für die App</p>
+  <div class="actions">
+    <label class="button primary" id="open-audio-label">🎸 Aufnahme öffnen
+      <input type="file" id="open-audio" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden></label>
+    <label class="button">📄 JSON öffnen
+      <input type="file" id="open-json" accept=".json,application/json" hidden></label>
+    <button id="save-json" class="button primary" disabled>⬇ JSON speichern</button>
+  </div>
+</header>
+
+<section id="drop" class="drop">
+  <p><strong>Aufnahme hierher ziehen</strong> (MP3, WAV, M4A …) oder oben öffnen.</p>
+  <p class="hint">Am besten: nur die Gitarre, eine Melodie, einzeln gespielte Noten, gleichmäßiges Tempo.
+    Die Aufnahme bleibt auf deinem Rechner, nichts wird hochgeladen.</p>
+</section>
+
+<section id="progress" class="progress" hidden>
+  <p id="progress-text">Analysiere …</p>
+  <div class="bar"><div id="progress-bar"></div></div>
+</section>
+
+<main id="editor" hidden>
+  <section class="meta">
+    <label>Titel <input id="title" autocomplete="off"></label>
+    <label>Interpret <input id="artist" autocomplete="off"></label>
+    <label>Datei-ID <input id="song-id" autocomplete="off" pattern="[a-z0-9-]+"></label>
+    <label>Tempo (BPM) <input id="bpm" type="number" min="30" max="260" step="0.1"></label>
+    <label>Takt
+      <select id="beats-per-bar"><option>2</option><option>3</option><option selected>4</option><option>6</option></select>
+      <span class="unit">/4</span></label>
+    <div class="meta-buttons">
+      <button id="requantize" class="button small" title="Die erkannten Noten mit dem eingetragenen Tempo neu ins Raster setzen">Raster neu berechnen</button>
+      <button id="shift-left" class="button small" title="Alle Noten einen Schritt früher">⟵ 1</button>
+      <button id="shift-right" class="button small" title="Alle Noten einen Schritt später (z. B. für einen Auftakt)">1 ⟶</button>
+    </div>
+  </section>
+
+  <section class="transport">
+    <button id="play" class="button primary round" title="Abspielen (Leertaste)">▶</button>
+    <label><input type="checkbox" id="hear-audio" checked> Aufnahme</label>
+    <label><input type="checkbox" id="hear-notes" checked> Noten</label>
+    <label>Tempo
+      <select id="speed"><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="1" selected>100 %</option></select></label>
+    <label class="zoom">Zoom <input type="range" id="zoom" min="6" max="60" value="22"></label>
+    <span id="status" class="status"></span>
+  </section>
+
+  <section class="timeline">
+    <canvas id="canvas" tabindex="0" aria-label="Tabulatur: Noten anklicken zum Bearbeiten, doppelklicken zum Hinzufügen"></canvas>
+    <input type="range" id="scroll" min="0" max="100" value="0" aria-label="Scrollen">
+  </section>
+
+  <section class="inspector" id="inspector">
+    <p class="empty" id="inspector-empty">Note anklicken zum Bearbeiten · Doppelklick auf eine Saite fügt eine Note hinzu.</p>
+    <div id="inspector-fields" hidden>
+      <div class="note-name" id="note-name">A4</div>
+      <label>Saite <select id="f-string">
+        <option value="1">1 (e)</option><option value="2">2 (B)</option><option value="3">3 (G)</option>
+        <option value="4">4 (D)</option><option value="5">5 (A)</option><option value="6">6 (E)</option></select></label>
+      <label>Bund <input id="f-fret" type="number" min="0" max="24"></label>
+      <label>Start <input id="f-tick" type="number" min="0"></label>
+      <label>Länge <input id="f-length" type="number" min="1"></label>
+      <label>Finger <select id="f-finger">
+        <option value="auto">automatisch</option><option value="0">0 – leere Saite</option>
+        <option value="1">1 – Zeigefinger</option><option value="2">2 – Mittelfinger</option>
+        <option value="3">3 – Ringfinger</option><option value="4">4 – kleiner Finger</option></select></label>
+      <button id="other-position" class="button small" title="Gleicher Ton auf einer anderen Saite (Alt + ↑/↓)">Andere Saite, gleicher Ton</button>
+      <button id="delete" class="button small danger" title="Entfernen">Löschen</button>
+    </div>
+  </section>
+
+  <details class="help">
+    <summary>Tastenkürzel</summary>
+    <ul>
+      <li><kbd>Leertaste</kbd> abspielen / anhalten</li>
+      <li><kbd>←</kbd> <kbd>→</kbd> Note einen Schritt verschieben · <kbd>Tab</kbd> nächste Note</li>
+      <li><kbd>↑</kbd> <kbd>↓</kbd> Bund höher / tiefer · <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> gleicher Ton auf anderer Saite</li>
+      <li><kbd>[</kbd> <kbd>]</kbd> kürzer / länger · <kbd>0</kbd>–<kbd>4</kbd> Finger · <kbd>A</kbd> Finger automatisch</li>
+      <li><kbd>Entf</kbd> löschen · <kbd>Strg</kbd>+<kbd>Z</kbd> rückgängig · <kbd>Strg</kbd>+<kbd>Y</kbd> wiederholen</li>
+    </ul>
+  </details>
+</main>
+
+<footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
+<script type="module" src="studio.js"></script>
+</body>
+</html>

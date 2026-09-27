@@ -8,6 +8,8 @@ import 'package:yalla_play/features/tuner/data/tuner_engine.dart';
 import 'package:yalla_play/features/tuner/data/tuning.dart';
 import 'dart:math' as math;
 
+import 'demo_chart.dart';
+
 class FakeTunerEngine implements TunerEngine {
   PitchCallback? onPitch;
   @override
@@ -188,7 +190,11 @@ void main() {
     final engine = FakeTunerEngine();
     await tester.pumpWidget(
       MaterialApp(
-        home: GameScreen(song: songs.first, engineFactory: () => engine),
+        home: GameScreen(
+          song: songs.first,
+          chart: demoChart,
+          engineFactory: () => engine,
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('game-start')));
@@ -228,7 +234,11 @@ void main() {
     final engine = FakeTunerEngine();
     await tester.pumpWidget(
       MaterialApp(
-        home: GameScreen(song: songs.first, engineFactory: () => engine),
+        home: GameScreen(
+          song: songs.first,
+          chart: demoChart,
+          engineFactory: () => engine,
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('game-start-practice')));

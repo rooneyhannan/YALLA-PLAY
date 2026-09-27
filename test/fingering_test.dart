@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:yalla_play/features/game/data/fingering.dart';
 import 'package:yalla_play/features/game/data/song_data.dart';
 
+import 'demo_chart.dart';
+
 void main() {
   test('one finger per fret, open strings need none', () {
     // Frets 1–4 fit first position: index to pinky.
