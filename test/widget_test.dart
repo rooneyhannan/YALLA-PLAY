@@ -2,6 +2,7 @@ import 'test_fonts.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:yalla_play/core/models/song.dart';
 import 'package:yalla_play/main.dart';
 import 'package:yalla_play/features/game/presentation/game_screen.dart';
 
@@ -103,4 +104,28 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  testWidgets('The play screen fits phones upright and sideways', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final size in [
+      const Size(390, 844),
+      const Size(360, 640),
+      const Size(844, 390),
+    ]) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(MaterialApp(home: GameScreen(song: songs.first)));
+      await tester.tap(find.byKey(const ValueKey('game-start-preview')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 3100));
+      await tester.pump(const Duration(seconds: 2));
+      expect(tester.takeException(), isNull, reason: 'Layout at $size');
+      expect(find.byKey(const ValueKey('finger-hand')), findsOneWidget);
+      expect(find.byKey(const ValueKey('finger-label')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
 }
