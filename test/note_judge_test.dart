@@ -135,6 +135,49 @@ void main() {
     expect(judge.firstOpen, isNull);
   });
 
+  test('hears the wanted note under a louder chord, not a semitone off', () {
+    const rate = 48000;
+    // A plucked-like tone: a few harmonics, fading.
+    List<double> tone(double hz, double level) => [
+      for (var i = 0; i < 4096; i++)
+        level *
+            math.exp(-i / rate / .8) *
+            (math.sin(2 * math.pi * hz * i / rate) +
+                .5 * math.sin(4 * math.pi * hz * i / rate) +
+                .25 * math.sin(6 * math.pi * hz * i / rate)),
+    ];
+    List<double> mix(List<List<double>> parts) => [
+      for (var i = 0; i < 4096; i++) parts.fold(0.0, (s, p) => s + p[i]),
+    ];
+    double rms(List<double> x) =>
+        math.sqrt(x.fold(0.0, (s, v) => s + v * v) / x.length);
+    // The backing: C, E and G, twice as loud as the guitar, but no A.
+    final chord = mix([tone(261.63, .4), tone(329.63, .4), tone(392, .4)]);
+    final silent = List.filled(4096, 0.0);
+
+    final right = ExpectedNoteDetector();
+    final withA = mix([chord, tone(440, .2)]);
+    expect(right.heard(0, silent, rate, 440, 0), isFalse);
+    expect(right.heard(0, withA, rate, 440, rms(withA)), isTrue);
+
+    final wrong = ExpectedNoteDetector();
+    final withBb = mix([chord, tone(466.16, .2)]);
+    expect(wrong.heard(0, silent, rate, 440, 0), isFalse);
+    expect(wrong.heard(0, withBb, rate, 440, rms(withBb)), isFalse);
+
+    // The chord alone never counts as the A.
+    final none = ExpectedNoteDetector();
+    expect(none.heard(0, silent, rate, 440, 0), isFalse);
+    expect(none.heard(0, chord, rate, 440, rms(chord)), isFalse);
+
+    // The next A while the last one still rings: only a new pluck counts.
+    final ringing = mix([chord, tone(440, .1)]);
+    expect(right.heard(1, ringing, rate, 440, rms(ringing)), isFalse);
+    expect(right.heard(1, ringing, rate, 440, rms(ringing)), isFalse);
+    final plucked = mix([chord, tone(440, .3)]);
+    expect(right.heard(1, plucked, rate, 440, rms(plucked)), isTrue);
+  });
+
   testWidgets('playing along into the microphone scores the notes', (
     tester,
   ) async {

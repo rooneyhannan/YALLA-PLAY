@@ -209,3 +209,55 @@ double periodicityAt(
   final off = 1200 * math.log(period / bestLag) / math.ln2;
   return off.abs() <= toleranceCents ? best : -1;
 }
+
+final _hannWindows = <int, Float64List>{};
+
+/// Amplitude of the sine at [frequency] in [buffer]: one frequency of a
+/// Fourier transform (the Goertzel algorithm) over a Hann window.
+double sineAmplitude(List<double> buffer, num sampleRate, double frequency) {
+  final n = buffer.length;
+  final window = _hannWindows.putIfAbsent(
+    n,
+    () => Float64List.fromList([
+      for (var i = 0; i < n; i++) .5 - .5 * math.cos(2 * math.pi * i / (n - 1)),
+    ]),
+  );
+  final coeff = 2 * math.cos(2 * math.pi * frequency / sampleRate);
+  var s1 = 0.0, s2 = 0.0;
+  for (var i = 0; i < n; i++) {
+    final s0 = buffer[i] * window[i] + coeff * s1 - s2;
+    s2 = s1;
+    s1 = s0;
+  }
+  return 4 * math.sqrt(math.max(0, s1 * s1 + s2 * s2 - coeff * s1 * s2)) / n;
+}
+
+/// How strongly the note [frequency] sounds in [buffer], and how much
+/// more than the notes a semitone above and below it.
+///
+/// Sums the note and its first two octaves: all the same pitch class, so
+/// the backing, which never plays that class, adds nothing; and the upper
+/// octaves separate neighbouring semitones better than the low one.
+({double level, double contrast}) noteStrength(
+  List<double> buffer,
+  num sampleRate,
+  double frequency,
+) {
+  double strength(double f) {
+    var sum = 0.0;
+    for (final h in const [1, 2, 4]) {
+      if (h * f < sampleRate / 2) {
+        sum += sineAmplitude(buffer, sampleRate, h * f);
+      }
+    }
+    return sum;
+  }
+
+  const semitone = 1.0594630943592953;
+  final level = strength(frequency);
+  final neighbours = math.max(
+    strength(frequency * semitone),
+    strength(frequency / semitone),
+  );
+  return (level: level, contrast: level / math.max(neighbours, 1e-9));
+}
