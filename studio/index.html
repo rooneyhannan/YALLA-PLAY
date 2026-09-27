@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css?v=2026-09-27.1732">
-<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-09-27.1732"}}</script>
+<link rel="stylesheet" href="studio.css?v=2026-09-27.1957">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-09-27.1957"}}</script>
 </head>
 <body>
 <header>
@@ -52,6 +52,7 @@
       <button id="requantize" class="button small" title="Die erkannten Noten mit dem eingetragenen Tempo neu ins Raster setzen">Raster neu berechnen</button>
       <button id="shift-left" class="button small" title="Alle Noten einen Schritt früher">⟵ 1</button>
       <button id="shift-right" class="button small" title="Alle Noten einen Schritt später (z. B. für einen Auftakt)">1 ⟶</button>
+      <button id="suggest-chords" class="button small" title="Akkorde für die Begleitung aus der Melodie vorschlagen">Akkorde vorschlagen</button>
     </div>
   </section>
 
@@ -59,6 +60,7 @@
     <button id="play" class="button primary round" title="Abspielen (Leertaste)">▶</button>
     <label><input type="checkbox" id="hear-audio" checked> Aufnahme</label>
     <label><input type="checkbox" id="hear-notes" checked> Noten</label>
+    <label><input type="checkbox" id="hear-chords" checked> Akkorde</label>
     <label>Tempo
       <select id="speed"><option value="0.5">50 %</option><option value="0.75">75 %</option><option value="1" selected>100 %</option></select></label>
     <label class="zoom">Zoom <input type="range" id="zoom" min="6" max="60" value="22"></label>
@@ -71,7 +73,17 @@
   </section>
 
   <section class="inspector" id="inspector">
-    <p class="empty" id="inspector-empty">Note anklicken zum Bearbeiten · Doppelklick auf eine Saite fügt eine Note hinzu.</p>
+    <p class="empty" id="inspector-empty">Note oder Akkord anklicken zum Bearbeiten · Doppelklick auf eine Saite fügt eine Note hinzu, Doppelklick auf die Akkordzeile einen Akkord.</p>
+    <div id="chord-fields" hidden>
+      <div class="note-name" id="chord-name">Dm</div>
+      <label>Grundton <select id="c-root"></select></label>
+      <label>Art <select id="c-quality"></select></label>
+      <label>Bass <select id="c-bass"></select></label>
+      <label>Start <input id="c-tick" type="number" min="0"></label>
+      <label>Länge <input id="c-length" type="number" min="1"></label>
+      <button id="c-delete" class="button small danger">Löschen</button>
+      <p class="hint chord-hint">In der App spielt die Begleitung diesen Akkord, lässt aber den Ton weg, den der Spieler gerade spielen soll.</p>
+    </div>
     <div id="inspector-fields" hidden>
       <div class="note-name" id="note-name">A4</div>
       <label>Saite <select id="f-string">
@@ -97,11 +109,12 @@
       <li><kbd>↑</kbd> <kbd>↓</kbd> Bund höher / tiefer · <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> gleicher Ton auf anderer Saite</li>
       <li><kbd>[</kbd> <kbd>]</kbd> kürzer / länger · <kbd>0</kbd>–<kbd>4</kbd> Finger · <kbd>A</kbd> Finger automatisch</li>
       <li><kbd>Entf</kbd> löschen · <kbd>Strg</kbd>+<kbd>Z</kbd> rückgängig · <kbd>Strg</kbd>+<kbd>Y</kbd> wiederholen</li>
+      <li>Akkord ausgewählt: <kbd>←</kbd> <kbd>→</kbd> einen Schlag verschieben · <kbd>[</kbd> <kbd>]</kbd> einen Schlag kürzer / länger</li>
     </ul>
   </details>
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js?v=2026-09-27.1732"></script>
+<script type="module" src="studio.js?v=2026-09-27.1957"></script>
 </body>
 </html>

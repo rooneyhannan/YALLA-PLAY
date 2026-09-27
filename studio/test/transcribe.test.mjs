@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  assignFingers, assignTab, chartNotes, detectTempo, fromJson, melodyOf, midiOf, positions, quantize, slug, toJson,
+  CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
+  midiOf, parseChord, positions, quantize, slug, suggestChords, toJson,
 } from '../transcribe.js';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url)));
@@ -85,3 +86,37 @@ test('file names from titles', () => {
   assert.equal(slug('Ba’dak Ala Bali'), 'ba-dak-ala-bali');
   assert.equal(slug('تملي معاك'), 'song');
 });
+
+test('chords: names, parts and the same table as the app', () => {
+  assert.deepEqual(chordTones(parseChord('Dm')).sort((a, b) => a - b), [2, 5, 9]);
+  assert.deepEqual(chordTones(parseChord('A7')).sort((a, b) => a - b), [1, 4, 7, 9]);
+  const slash = parseChord('C/E');
+  assert.equal(slash.root, 0);
+  assert.equal(slash.bass, 4);
+  for (const bad of ['H', 'Cx', 'c', '', 'Dmm', 'C/H']) assert.equal(parseChord(bad), null, bad);
+  assert.equal(chordName(10, 'm7'), 'Bbm7');
+  assert.equal(chordName(0, '', 4), 'C/E');
+  assert.equal(chordName(0, '', 0), 'C');
+  // The app reads the same chord types.
+  const dart = readFileSync(new URL('../../lib/features/game/data/chord_symbol.dart', import.meta.url), 'utf8');
+  const table = dart.slice(dart.indexOf('qualities ='), dart.indexOf('};', dart.indexOf('qualities =')));
+  const fromDart = Object.fromEntries([...table.matchAll(/'([a-z0-9]*)': \[([0-9, ]+)\]/g)]
+    .map((m) => [m[1], m[2].split(',').map(Number)]));
+  assert.deepEqual(fromDart, Object.fromEntries(Object.entries(CHORD_QUALITIES)));
+});
+
+test('chords are suggested from the melody, as the app would choose them', () => {
+  const chords = suggestChords(truth);
+  assert.deepEqual(chords.slice(0, 3).map((c) => c.name), ['Dm', 'Am', 'C']);
+  // Back to back, covering the song.
+  for (let i = 1; i < chords.length; i++) assert.equal(chords[i].t, chords[i - 1].t + chords[i - 1].d);
+});
+
+test('chords go into the song file and come back', () => {
+  const chords = [{ t: 0, d: 16, name: 'Dm' }, { t: 16, d: 8, name: 'C/E' }];
+  const text = toJson({ id: 'x', title: 'X', bpm: 90 }, truth.slice(0, 2), chords);
+  assert.match(text, /"chords": \[\n    \{"t": 0, "d": 16, "name": "Dm"\}/);
+  assert.deepEqual(fromJson(text).chords, chords);
+  assert.throws(() => fromJson(text.replace('"Dm"', '"Hm"')), /Ungültiger Akkord/);
+});
+
