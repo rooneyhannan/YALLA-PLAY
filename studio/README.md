@@ -16,6 +16,6 @@ Open <https://rooneyhannan.github.io/YALLA-PLAY/studio/> in a desktop browser:
 **JSON öffnen** loads a song file again for editing.
 
 - `transcribe.js`: melody, tempo, grid, tab and fingers; pure functions.
-- `studio.js`: the page. `transcribe.worker.js`: Basic Pitch off the page's thread.
+- `studio.js`: the page. `transcribe.worker.js`: Basic Pitch in a worker on WebAssembly (no graphics card needed), falling back to the processor.
 - `vendor/`: Basic Pitch and its model (Apache 2.0).
 - Tests: `node --test 'studio/test/*.test.mjs'`.

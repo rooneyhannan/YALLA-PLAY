@@ -32,6 +32,19 @@ test('the recording becomes the song: every note at its step and pitch', () => {
   });
 });
 
+test('a realistic recording: reverb, noise, a player\'s timing', () => {
+  const heard = read('./basic_pitch_realistic.json').notes
+    .map(([start, duration, midi, amplitude]) => ({ start, duration, midi, amplitude }));
+  const tempo = detectTempo(melodyOf(heard));
+  assert.equal(tempo.bpm, 90);
+  const notes = new Map(chartNotes(heard, tempo).map((n) => [n.t, n]));
+  const right = truth.filter((n) => {
+    const got = notes.get(n.t);
+    return got && midiOf(got.s, got.f) === midiOf(n.s, n.f);
+  }).length;
+  assert.ok(right >= 55, `${right} of ${truth.length} notes right`);
+});
+
 test('held notes ring on to the next, long gaps stay rests', () => {
   const grid = quantize([
     { start: 0, duration: 0.3, midi: 64, amplitude: 1 },

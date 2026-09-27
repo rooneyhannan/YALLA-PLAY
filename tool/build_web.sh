@@ -22,5 +22,8 @@ grep -q "flutter_bootstrap.js?v=$build" "$out/index.html"
 if [[ "${1:-}" == "--publish" ]]; then
   cp -R "$out/." .
   touch .nojekyll
+  # Yalla Studio is static: the same stamp on its files makes a reload
+  # load this release of every one of them.
+  sed -i -E "s/\?v=[-0-9.]+/?v=$build/g" studio/index.html
 fi
 echo "Built web app $build"

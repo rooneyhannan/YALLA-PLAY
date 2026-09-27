@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css">
+<link rel="stylesheet" href="studio.css?v=2026-09-27.1732">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-09-27.1732"}}</script>
 </head>
 <body>
 <header>
@@ -23,7 +24,7 @@
   <p><strong>Aufnahme hierher ziehen</strong> (MP3, WAV, M4A …) oder oben öffnen.</p>
   <p class="hint">Am besten: nur die Gitarre, eine Melodie, einzeln gespielte Noten, gleichmäßiges Tempo.
     Die Aufnahme bleibt auf deinem Rechner, nichts wird hochgeladen.</p>
-  <p class="hint">Gedacht für PC oder Laptop mit Chrome, Edge, Safari oder Firefox. Auf dem Handy ist die Erkennung sehr langsam.</p>
+  <p class="hint">Gedacht für PC oder Laptop (Chrome, Edge, Safari, Firefox); auf dem Handy geht es auch, nur langsamer.</p>
 </section>
 
 <section id="progress" class="progress" hidden>
@@ -33,8 +34,9 @@
     <button id="cancel" class="button small">Abbrechen</button>
   </div>
   <div class="bar"><div id="progress-bar"></div></div>
-  <p id="progress-hint" class="hint" hidden>Das dauert ohne Grafikkarte und bei langen Aufnahmen eine Weile, die Anzeige springt erst nach dem ersten Abschnitt.
-    Tipp: erst mit einer kurzen Aufnahme (unter 1 Minute) am PC oder Laptop testen.</p>
+  <p id="progress-hint" class="hint" hidden>Bei langen Aufnahmen oder auf dem Handy dauert es eine Weile; die Anzeige springt erst nach dem ersten Abschnitt.
+    Steht sie lange still, schick mir bitte ein Bildschirmfoto dieser Seite.</p>
+  <p id="diagnostics" class="hint diag"></p>
 </section>
 
 <main id="editor" hidden>
@@ -100,6 +102,6 @@
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js"></script>
+<script type="module" src="studio.js?v=2026-09-27.1732"></script>
 </body>
 </html>
