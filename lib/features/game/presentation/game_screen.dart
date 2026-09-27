@@ -14,6 +14,10 @@ import 'highway_painter.dart';
 
 export 'highway_painter.dart' show GameNote;
 
+/// Playing runs the song through and scores it; practice waits at every
+/// note until it is played.
+enum GameMode { play, practice }
+
 class GameScreen extends StatefulWidget {
   final Song song;
   final TunerEngine Function() engineFactory;
@@ -47,7 +51,12 @@ class _GameScreenState extends State<GameScreen>
   double _seconds = 0, _currentTick = 0, _speed = 1, _countdown = 0;
   Duration _lastElapsed = Duration.zero;
   bool _started = false, _playing = false, _listening = false;
+  GameMode _mode = GameMode.play;
   double _level = 0;
+
+  /// Seconds practice has been waiting at the next note, or null while
+  /// the song moves.
+  double? _waited;
 
   /// Tick of the last pluck, while its pitch may still settle.
   double? _pluckTick;
@@ -58,6 +67,11 @@ class _GameScreenState extends State<GameScreen>
   double get _end => _notes.last.absoluteTime + _notes.last.note.d + _leadTicks;
   bool get _finished => _currentTick >= _end;
   double get _ticksPerSecond => 6 * _speed;
+  bool get _practicing => _listening && _mode == GameMode.practice;
+
+  /// Song time for judging: stands still at a note practice waits at, so
+  /// the waiting is counted in as lateness.
+  double get _clock => _currentTick + (_waited ?? 0) * _ticksPerSecond;
 
   @override
   void initState() {
@@ -83,10 +97,12 @@ class _GameScreenState extends State<GameScreen>
     _ticker = createTicker(_onTick)..start();
   }
 
-  /// Starts the song after a countdown; with [listen], the microphone
+  /// Starts the song after a countdown; with a [mode], the microphone
   /// scores the playing. Must run from a tap, for the browser's sake.
-  Future<void> _start({required bool listen}) async {
-    if (listen) {
+  Future<void> _start(GameMode? mode) async {
+    if (mode != null) {
+      _mode = mode;
+      _judge.patient = mode == GameMode.practice;
       try {
         await _engine.start(_onPitch, onFrame: _onFrame);
         _listening = true;
@@ -121,7 +137,15 @@ class _GameScreenState extends State<GameScreen>
         return;
       }
       if (!_playing) return;
-      _currentTick = math.min(_end, _currentTick + seconds * _ticksPerSecond);
+      var next = _currentTick + seconds * _ticksPerSecond;
+      final open = _practicing ? _judge.firstOpen : null;
+      if (open != null && next >= _judge.starts[open]) {
+        // Practice holds the song at the note until it is played.
+        _waited =
+            (_waited ?? 0) + (next - _judge.starts[open]) / _ticksPerSecond;
+        next = _judge.starts[open];
+      }
+      _currentTick = math.min(_end, next);
       if (_listening) {
         for (final i in _judge.expire(
           _currentTick,
@@ -156,12 +180,12 @@ class _GameScreenState extends State<GameScreen>
     _frame = null;
     if (!_playing) return;
     if (_onsets.feed(level, frequency)) {
-      _pluckTick = _currentTick - _micLatency * _ticksPerSecond;
+      _pluckTick = _clock - _micLatency * _ticksPerSecond;
     }
     final pluck = _pluckTick;
     if (pluck == null || (frequency == null && frame == null)) return;
     // The pitch settles a few readings after the attack; give it a moment.
-    if (_currentTick - pluck > .3 * _ticksPerSecond) {
+    if (_clock - pluck > .3 * _ticksPerSecond) {
       _pluckTick = null;
       return;
     }
@@ -174,15 +198,16 @@ class _GameScreenState extends State<GameScreen>
     _frame = null;
     if (index != null) {
       _pluckTick = null;
-      setState(
-        () => _feedback.add(
+      setState(() {
+        _waited = null;
+        _feedback.add(
           FeedbackMark(
             _judge.verdicts[index]!,
             _notes[index].note.s - 1,
             _seconds,
           ),
-        ),
-      );
+        );
+      });
     }
   }
 
@@ -206,6 +231,7 @@ class _GameScreenState extends State<GameScreen>
       _judge.reset();
       _feedback.clear();
       _pluckTick = null;
+      _waited = null;
     });
   }
 
@@ -245,18 +271,21 @@ class _GameScreenState extends State<GameScreen>
                     background: _background,
                     verdicts: _listening ? _judge.verdicts : null,
                     feedback: _feedback,
+                    waiting: _waited != null ? _judge.firstOpen : null,
                   ),
                 ),
               ),
             ),
             Positioned(left: 0, right: 0, top: 0, child: _header()),
             Positioned(left: 0, right: 0, bottom: 0, child: _controls()),
+            if (_waited != null && _playing)
+              Positioned(left: 0, right: 0, top: 84, child: _waitingHint()),
             if (!_started)
-              Center(child: _startCard())
+              Center(child: SingleChildScrollView(child: _startCard()))
             else if (_countdown > 0)
               Center(child: _countdownNumber())
             else if (_finished && _listening)
-              Center(child: _resultCard())
+              Center(child: SingleChildScrollView(child: _resultCard()))
             else if (!_playing)
               Center(child: _pauseCard()),
           ],
@@ -304,9 +333,13 @@ class _GameScreenState extends State<GameScreen>
           ],
         ),
         Text(
-          widget.song.hasChart
+          !widget.song.hasChart
+              ? 'نغمات توضيحية • نوتة هذه الأغنية ستتوفر لاحقاً'
+              : !_listening
               ? 'اعزف مع حركة النغمات • التقييم غير مفعّل'
-              : 'نغمات توضيحية • نوتة هذه الأغنية ستتوفر لاحقاً',
+              : _practicing
+              ? 'وضع التدريب • ننتظرك عند كل نغمة'
+              : 'وضع العزف • كل نغمة تُقيَّم',
           textAlign: TextAlign.center,
           style: const TextStyle(color: AppTheme.cream, fontSize: 11),
         ),
@@ -339,6 +372,7 @@ class _GameScreenState extends State<GameScreen>
                 child: CustomPaint(
                   painter: SongOverviewPainter(
                     notes: _notes,
+                    verdicts: _listening ? _judge.verdicts : null,
                     progress: (_currentTick / _end).clamp(0, 1).toDouble(),
                     totalTicks: _end,
                   ),
@@ -436,27 +470,60 @@ class _GameScreenState extends State<GameScreen>
         ),
       ),
       const SizedBox(width: 10),
-      Text(
-        '×${_judge.multiplier}',
-        key: const ValueKey('game-multiplier'),
-        style: const TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-          color: AppTheme.cream,
+      if (_practicing)
+        Text(
+          '${_judge.judged} / ${_notes.length}',
+          key: const ValueKey('game-practice-count'),
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.gold,
+          ),
+        )
+      else ...[
+        Text(
+          '×${_judge.multiplier}',
+          key: const ValueKey('game-multiplier'),
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.cream,
+          ),
         ),
-      ),
-      const SizedBox(width: 14),
-      Text(
-        '${_judge.score}',
-        key: const ValueKey('game-score'),
-        style: const TextStyle(
-          fontSize: 26,
-          fontWeight: FontWeight.w700,
-          color: AppTheme.gold,
+        const SizedBox(width: 14),
+        Text(
+          '${_judge.score}',
+          key: const ValueKey('game-score'),
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.gold,
+          ),
         ),
-      ),
+      ],
     ],
   );
+
+  /// Tells which note practice waits for.
+  Widget _waitingHint() {
+    final note = _notes[_judge.firstOpen!].note;
+    return Center(
+      child: Container(
+        key: const ValueKey('game-waiting'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppTheme.surface.withValues(alpha: .9),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: stringColors[note.s - 1]),
+        ),
+        child: Text(
+          'اعزف النغمة: الوتر ${note.s} • العتبة ${note.f}',
+          textDirection: TextDirection.rtl,
+          style: const TextStyle(fontSize: 14, color: AppTheme.cream),
+        ),
+      ),
+    );
+  }
 
   Widget _card(List<Widget> children) => Container(
     constraints: const BoxConstraints(maxWidth: 360),
@@ -482,7 +549,7 @@ class _GameScreenState extends State<GameScreen>
     ),
     const SizedBox(height: 8),
     const Text(
-      'نستمع إلى عزفك عبر الميكروفون ونقيّم كل نغمة: الصوت الصحيح في الوقت الصحيح.',
+      'نستمع إلى عزفك عبر الميكروفون: الصوت الصحيح في الوقت الصحيح.',
       textAlign: TextAlign.center,
       style: TextStyle(color: AppTheme.cream, fontSize: 14),
     ),
@@ -491,15 +558,35 @@ class _GameScreenState extends State<GameScreen>
       width: double.infinity,
       child: FilledButton.icon(
         key: const ValueKey('game-start'),
-        onPressed: () => _start(listen: true),
+        onPressed: () => _start(GameMode.play),
         icon: const Icon(Icons.mic_rounded),
-        label: const Text('ابدأ العزف'),
+        label: const Text('العزف'),
       ),
     ),
-    const SizedBox(height: 6),
+    const Text(
+      'الأغنية كاملة دون توقف، وكل نغمة تُقيَّم.',
+      textAlign: TextAlign.center,
+      style: TextStyle(color: AppTheme.cream, fontSize: 12),
+    ),
+    const SizedBox(height: 12),
+    SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        key: const ValueKey('game-start-practice'),
+        onPressed: () => _start(GameMode.practice),
+        icon: const Icon(Icons.school_rounded),
+        label: const Text('التدريب'),
+      ),
+    ),
+    const Text(
+      'تتوقف الأغنية عند كل نغمة حتى تعزفها صحيحة.',
+      textAlign: TextAlign.center,
+      style: TextStyle(color: AppTheme.cream, fontSize: 12),
+    ),
+    const SizedBox(height: 10),
     TextButton(
       key: const ValueKey('game-start-preview'),
-      onPressed: () => _start(listen: false),
+      onPressed: () => _start(null),
       child: const Text('مشاهدة فقط، بدون ميكروفون'),
     ),
   ]);
@@ -518,41 +605,73 @@ class _GameScreenState extends State<GameScreen>
   Widget _resultCard() {
     final judged = _judge.verdicts;
     int count(Verdict v) => judged.where((x) => x == v).length;
-    return _card([
-      Row(
-        key: const ValueKey('game-stars'),
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          for (var i = 0; i < 3; i++)
-            Icon(
-              i < _judge.stars ? Icons.star_rounded : Icons.star_border_rounded,
-              size: 44,
-              color: AppTheme.gold,
-            ),
-        ],
-      ),
+    final practice = [
+      const Icon(Icons.school_rounded, size: 40, color: perfectColor),
       const SizedBox(height: 8),
-      Text(
-        '${_judge.score} نقطة',
-        style: const TextStyle(
-          fontSize: 26,
-          fontWeight: FontWeight.w700,
-          color: AppTheme.gold,
-        ),
+      const Text(
+        'انتهى التدريب',
+        key: ValueKey('game-practice-done'),
+        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
       ),
       Text(
-        'الدقة ${(_judge.accuracy * 100).round()}٪ • أطول سلسلة ${_judge.bestStreak}',
+        'في الوقت ${count(Verdict.perfect)} من ${_notes.length}',
         style: const TextStyle(color: AppTheme.cream),
       ),
+    ];
+    return _card([
+      if (_practicing)
+        ...practice
+      else ...[
+        Row(
+          key: const ValueKey('game-stars'),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < 3; i++)
+              Icon(
+                i < _judge.stars
+                    ? Icons.star_rounded
+                    : Icons.star_border_rounded,
+                size: 44,
+                color: AppTheme.gold,
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${_judge.score} نقطة',
+          style: const TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.gold,
+          ),
+        ),
+        Text(
+          'الدقة ${(_judge.accuracy * 100).round()}٪ • أطول سلسلة ${_judge.bestStreak}',
+          style: const TextStyle(color: AppTheme.cream),
+        ),
+      ],
       const SizedBox(height: 14),
       Wrap(
         spacing: 14,
         alignment: WrapAlignment.center,
         children: [
-          Text('ممتاز ${count(Verdict.perfect)}'),
-          Text('مبكر ${count(Verdict.early)}'),
-          Text('متأخر ${count(Verdict.late)}'),
-          Text('فائت ${count(Verdict.missed)}'),
+          Text(
+            'ممتاز ${count(Verdict.perfect)}',
+            style: const TextStyle(color: perfectColor),
+          ),
+          Text(
+            'مبكر ${count(Verdict.early)}',
+            style: const TextStyle(color: offTimeColor),
+          ),
+          Text(
+            'متأخر ${count(Verdict.late)}',
+            style: const TextStyle(color: offTimeColor),
+          ),
+          if (!_practicing)
+            Text(
+              'فائت ${count(Verdict.missed)}',
+              style: const TextStyle(color: Color(0xFF8A8F8C)),
+            ),
         ],
       ),
       const SizedBox(height: 18),
