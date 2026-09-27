@@ -17,8 +17,11 @@ export const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
  */
 export function melodyOf(notes, { together = 0.06 } = {}) {
   const lowest = OPEN_STRINGS[5], highest = OPEN_STRINGS[0] + MAX_FRET + 5;
-  const sorted = notes
-    .filter((n) => n.midi >= lowest && n.midi <= highest && n.duration > 0.04)
+  const playable = notes.filter((n) => n.midi >= lowest && n.midi <= highest && n.duration > 0.04);
+  // Room noise, hum and sympathetic strings come out much quieter than
+  // the notes played.
+  const typical = [...playable.map((n) => n.amplitude)].sort((a, b) => a - b)[Math.floor(playable.length / 2)] ?? 0;
+  const sorted = mergeGlitches(playable.filter((n) => n.amplitude >= 0.68 * typical))
     .sort((a, b) => a.start - b.start);
   const clusters = [];
   for (const n of sorted) {
@@ -50,42 +53,64 @@ export function melodyOf(notes, { together = 0.06 } = {}) {
 }
 
 /**
- * Finds the beat: the longest time step that the gaps between notes are
- * whole multiples of, taken as a quarter or eighth so the tempo lands
- * between 70 and 140 BPM. Returns {bpm, offset}: the time of the first beat.
+ * A pluck often starts a little off pitch and settles a moment later; the
+ * detector then hears a short note and the real one right after. Those
+ * become one note, starting with the pluck.
+ */
+function mergeGlitches(notes) {
+  const sorted = [...notes].sort((a, b) => a.start - b.start);
+  const out = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const n = sorted[i];
+    const next = sorted.slice(i + 1).find((m) => m.start > n.start + 0.03 && m.start - n.start < 0.25 &&
+      Math.abs(m.midi - n.midi) <= 2 && m.duration > n.duration);
+    if (n.duration < 0.2 && next) {
+      next.duration += next.start - n.start;
+      next.start = n.start;
+      next.amplitude = Math.max(next.amplitude, n.amplitude);
+      continue;
+    }
+    out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Finds the tempo: for every tempo from 50 to 200 BPM, how well all note
+ * starts sit on its grid of eighth notes (weighted by loudness, as a
+ * circular mean, so stray notes and a player's small wobbles count little).
+ * The slowest tempo that fits about as well as the best is taken, since
+ * every faster multiple fits too; then it is folded into 70–140 BPM.
+ * Returns {bpm, offset}: the time of the first note, on the grid.
  */
 export function detectTempo(melody, { ticksPerBeat = 4 } = {}) {
   const starts = melody.map((n) => n.start);
   if (starts.length < 3) return { bpm: 90, offset: starts[0] ?? 0 };
-  const gaps = [];
-  for (let i = 1; i < starts.length; i++) {
-    const g = starts[i] - starts[i - 1];
-    if (g > 0.08 && g < 3) gaps.push(g);
-  }
-  let unit = 0.25;
-  for (let u = 1.2; u >= 0.08; u -= 0.002) {
-    const fits = gaps.filter((g) => {
-      const k = Math.round(g / u);
-      return k >= 1 && Math.abs(g - k * u) <= 0.12 * u;
-    }).length;
-    if (fits >= 0.9 * gaps.length) {
-      unit = u;
-      break;
-    }
-  }
-  // Refine the unit by least squares over the gaps it explains.
-  let num = 0, den = 0;
-  for (const g of gaps) {
-    const k = Math.round(g / unit);
-    if (k >= 1 && Math.abs(g - k * unit) <= 0.12 * unit) {
-      num += g * k;
-      den += k * k;
-    }
-  }
-  if (den > 0) unit = num / den;
-  let beat = unit;
-  while (60 / beat > 140) beat *= 2;
-  while (60 / beat < 70) beat /= 2;
+  const weights = melody.map((n) => n.amplitude ?? 1);
+  const total = weights.reduce((a, b) => a + b);
+  const fit = (bpm) => {
+    const grid = 60 / bpm / 2;
+    let re = 0, im = 0;
+    starts.forEach((t, i) => {
+      const angle = (2 * Math.PI * t) / grid;
+      re += weights[i] * Math.cos(angle);
+      im += weights[i] * Math.sin(angle);
+    });
+    return Math.hypot(re, im) / total;
+  };
+  const scores = [];
+  for (let bpm = 50; bpm <= 200; bpm += 0.25) scores.push({ bpm, score: fit(bpm) });
+  const best = Math.max(...scores.map((s) => s.score));
+  // Local peaks close to the best; the slowest of them.
+  const peaks = scores.filter((s, i) =>
+    s.score >= 0.85 * best &&
+    (i === 0 || s.score >= scores[i - 1].score) &&
+    (i === scores.length - 1 || s.score >= scores[i + 1].score));
+  let bpm = peaks[0].bpm;
+  while (bpm < 70) bpm *= 2;
+  while (bpm > 140) bpm /= 2;
+  const beat = 60 / bpm;
+
   // Fit grid and start note by note (least squares over the notes so far),
   // each placed with the grid found before it: a small error in the first
   // guess cannot add up over the song.
@@ -116,7 +141,9 @@ export function quantize(melody, { bpm, offset, ticksPerBeat = 4 }) {
   const tick = 60 / bpm / ticksPerBeat;
   const out = [];
   for (const n of melody) {
-    const t = Math.max(0, Math.round((n.start - offset) / tick));
+    // Attacks are heard a little late rather than early: round towards the
+    // earlier step a bit more readily.
+    const t = Math.max(0, Math.round((n.start - offset) / tick - 0.12));
     if (out.length && out[out.length - 1].tick === t) continue; // one note per step
     out.push({ tick: t, midi: n.midi, length: Math.max(1, Math.round(n.duration / tick)), amplitude: n.amplitude });
   }

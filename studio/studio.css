@@ -45,6 +45,8 @@ code { color: var(--gold); }
 .progress-row { display: flex; align-items: center; gap: 12px; }
 .progress-row p { margin: 0 0 8px; flex: 1; }
 .time { color: var(--cream); font-variant-numeric: tabular-nums; }
+.error { color: var(--danger); }
+.diag { font-size: 12px; color: #8a8f8c; }
 .bar { height: 8px; border-radius: 4px; background: var(--raised); overflow: hidden; }
 #progress-bar { height: 100%; width: 0; background: var(--gold); transition: width .2s; }
 main { margin-top: 16px; display: grid; gap: 12px; }

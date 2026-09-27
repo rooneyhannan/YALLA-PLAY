@@ -1,12 +1,22 @@
-// Runs Basic Pitch off the page's thread, so the Studio stays responsive
-// while it listens: receives mono samples at 22 050 Hz, answers with
-// progress messages and finally the notes it heard.
-import {
-  BasicPitch, addPitchBendsToNoteEvents, noteFramesToTime, outputToNotesPoly,
-} from './vendor/basic-pitch.js';
-
+// Runs Basic Pitch off the page's thread, on WebAssembly: fast on every
+// device and independent of the graphics card, which some browsers offer
+// but cannot run TensorFlow on. Receives mono samples at 22 050 Hz,
+// answers with the engine, progress messages and finally the notes.
 self.onmessage = async ({ data: { samples } }) => {
   try {
+    // The same version as this worker, so no cached older copy mixes in.
+    const version = new URL(import.meta.url).search;
+    const {
+      BasicPitch, addPitchBendsToNoteEvents, noteFramesToTime, outputToNotesPoly,
+      setBackend, getBackend, setWasmPaths,
+    } = await import(`./vendor/basic-pitch.js${version}`);
+    setWasmPaths(new URL('./vendor/wasm/', import.meta.url).href);
+    let engine = 'WebAssembly';
+    if (!(await setBackend('wasm').catch(() => false)) || getBackend() !== 'wasm') {
+      await setBackend('cpu');
+      engine = 'Prozessor (langsamer)';
+    }
+    self.postMessage({ engine });
     const model = new BasicPitch(new URL('./vendor/model/model.json', import.meta.url).href);
     const frames = [], onsets = [], contours = [];
     await model.evaluateModel(samples, (f, o, c) => {
