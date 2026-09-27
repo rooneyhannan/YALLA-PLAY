@@ -104,6 +104,32 @@ class NoteJudge {
         ticksPerSecond: ticksPerSecond,
       );
 
+  /// Scores note [i] as played at [tick], when that is within its window
+  /// (and, while practising, it is the next note). Returns whether it did.
+  bool pluckNote(int i, double tick, {required double ticksPerSecond}) {
+    if (verdicts[i] != null) return false;
+    if (patient && i != firstOpen) return false;
+    final offset = (tick - starts[i]) / ticksPerSecond;
+    if (offset < -earlyWindow || (offset > lateWindow && !patient)) {
+      return false;
+    }
+    _score(i, offset);
+    return true;
+  }
+
+  void _score(int i, double offset) {
+    final verdict = offset.abs() <= perfectWindow
+        ? Verdict.perfect
+        : offset < 0
+        ? Verdict.early
+        : Verdict.late;
+    verdicts[i] = verdict;
+    // The multiplier earned so far pays for this note.
+    score += (verdict == Verdict.perfect ? 100 : 50) * multiplier;
+    streak++;
+    bestStreak = math.max(bestStreak, streak);
+  }
+
   /// A pluck at [tick] that [sounds] like some of the due notes: scores the
   /// first one whose frequency it accepts.
   int? pluckWhere(
@@ -121,16 +147,7 @@ class NoteJudge {
         if (patient) break;
         continue;
       }
-      final verdict = offset.abs() <= perfectWindow
-          ? Verdict.perfect
-          : offset < 0
-          ? Verdict.early
-          : Verdict.late;
-      verdicts[i] = verdict;
-      // The multiplier earned so far pays for this note.
-      score += (verdict == Verdict.perfect ? 100 : 50) * multiplier;
-      streak++;
-      bestStreak = math.max(bestStreak, streak);
+      _score(i, offset);
       return i;
     }
     return null;
@@ -155,4 +172,36 @@ class NoteJudge {
     verdicts.fillRange(0, verdicts.length, null);
     score = streak = bestStreak = 0;
   }
+}
+
+/// Listens for each expected note itself: its pitch class clearly above the
+/// neighbouring semitones and just grown louder. Works while the backing
+/// plays, which never sounds that pitch class, and while other strings ring.
+class ExpectedNoteDetector {
+  /// Tuned on recordings with the backing louder than the guitar.
+  static const minContrast = 3.0, minLevel = .3, minRise = 2.0;
+
+  /// The note's strength in the last few frames.
+  final _history = <int, List<double>>{};
+
+  /// Whether note [i] at [frequency] has just started in [frame], whose
+  /// RMS level is [rms].
+  bool heard(
+    int i,
+    List<double> frame,
+    num sampleRate,
+    double frequency,
+    double rms,
+  ) {
+    final strength = noteStrength(frame, sampleRate, frequency);
+    final history = _history.putIfAbsent(i, () => []);
+    final before = history.isEmpty ? 0.0 : history.reduce(math.min);
+    history.add(strength.level);
+    if (history.length > 3) history.removeAt(0);
+    return strength.contrast >= minContrast &&
+        strength.level >= minLevel * rms &&
+        strength.level >= minRise * before;
+  }
+
+  void reset() => _history.clear();
 }

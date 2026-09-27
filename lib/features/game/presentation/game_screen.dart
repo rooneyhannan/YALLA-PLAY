@@ -7,10 +7,14 @@ import '../../../core/models/song.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../tuner/data/tuner_engine.dart';
 import '../../tuner/data/tuning.dart';
+import '../data/arrangement.dart';
 import '../data/ball_path.dart';
 import '../data/fingering.dart';
 import '../data/note_judge.dart';
 import '../data/song_data.dart';
+import '../data/sound_engine.dart';
+import '../data/sound_scheduler.dart';
+import '../data/synth.dart';
 import 'hand_painter.dart';
 import 'highway_painter.dart';
 
@@ -23,10 +27,12 @@ enum GameMode { play, practice }
 class GameScreen extends StatefulWidget {
   final Song song;
   final TunerEngine Function() engineFactory;
+  final SoundEngine Function() soundFactory;
   const GameScreen({
     super.key,
     required this.song,
     this.engineFactory = createTunerEngine,
+    this.soundFactory = createSoundEngine,
   });
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -43,12 +49,19 @@ class _GameScreenState extends State<GameScreen>
   /// How clearly an expected note must repeat to count while other strings
   /// ring; tuned on recordings so a semitone off does not pass.
   static const _presence = .6;
+
+  /// How far ahead sounds are handed to the audio clock, in seconds.
+  static const _soundAhead = .2;
   late final List<GameNote> _notes;
   late final BallPath _ball;
   late final NoteJudge _judge;
   late final Ticker _ticker;
   late final TunerEngine _engine = widget.engineFactory();
+  late final SoundEngine _sound = widget.soundFactory();
+  late final SoundScheduler _scheduler;
+  bool _metronome = true, _backing = true;
   final _onsets = OnsetDetector();
+  final _expected = ExpectedNoteDetector();
   final _feedback = <FeedbackMark>[];
   double _seconds = 0, _currentTick = 0, _speed = 1, _countdown = 0;
   Duration _lastElapsed = Duration.zero;
@@ -108,12 +121,28 @@ class _GameScreenState extends State<GameScreen>
       starts: [for (final n in _notes) n.absoluteTime + _leadTicks],
       frequencies: [for (final n in _notes) noteFrequency(n.note)],
     );
+    _scheduler = SoundScheduler(
+      Arrangement.of(
+        [
+          for (final n in _notes)
+            (
+              start: n.absoluteTime + _leadTicks,
+              length: n.note.d.toDouble(),
+              frequency: noteFrequency(n.note),
+            ),
+        ],
+        firstBeat: _leadTicks,
+        end: _end,
+      ).events,
+    );
     _ticker = createTicker(_onTick)..start();
   }
 
   /// Starts the song after a countdown; with a [mode], the microphone
   /// scores the playing. Must run from a tap, for the browser's sake.
   Future<void> _start(GameMode? mode) async {
+    // Before any await, so the browser sees it as started by the tap.
+    final sound = _sound.start();
     if (mode != null) {
       _mode = mode;
       _judge.patient = mode == GameMode.practice;
@@ -130,11 +159,44 @@ class _GameScreenState extends State<GameScreen>
         }
       }
     }
+    await sound;
     if (!mounted) return;
     setState(() {
       _started = true;
       _countdown = _countdownSeconds;
     });
+    _countIn();
+  }
+
+  /// One click for each second of the countdown, stressed on the last.
+  void _countIn() {
+    final now = _sound.time;
+    if (now == null || !_metronome) return;
+    for (var i = 0; i < _countdownSeconds; i++) {
+      _sound.play(
+        i == _countdownSeconds - 1 ? Voice.accent : Voice.click,
+        0,
+        at: now + i,
+        length: .05,
+        gain: 1,
+      );
+    }
+  }
+
+  /// Which sounds play: the metronome and the backing by their switches,
+  /// the melody only while nobody plays along, so the microphone never
+  /// hears it.
+  bool _audible(SoundEvent e) => switch (e.voice) {
+    Voice.click || Voice.accent => _metronome,
+    Voice.chord || Voice.bass => _backing,
+    Voice.guitar => _backing && !_listening,
+  };
+
+  /// Starts the sounds over from the current tick, after a pause, a seek,
+  /// a new speed or a switch.
+  void _resound() {
+    _sound.silence();
+    _scheduler.seek(_currentTick);
   }
 
   void _onTick(Duration elapsed) {
@@ -148,7 +210,10 @@ class _GameScreenState extends State<GameScreen>
       _seconds += seconds;
       if (_countdown > 0) {
         _countdown = math.max(0, _countdown - seconds);
-        if (_countdown == 0) _playing = true;
+        if (_countdown == 0) {
+          _playing = true;
+          _scheduler.seek(_currentTick);
+        }
         return;
       }
       if (!_playing) return;
@@ -161,6 +226,21 @@ class _GameScreenState extends State<GameScreen>
         next = _judge.starts[open];
       }
       _currentTick = math.min(_end, next);
+      final now = _sound.time;
+      if (now != null) {
+        var until = _currentTick + _soundAhead * _ticksPerSecond;
+        // While practice waits at a note, nothing after it may sound yet.
+        final open = _practicing ? _judge.firstOpen : null;
+        if (open != null) until = math.min(until, _judge.starts[open]);
+        _scheduler.run(
+          _sound,
+          tick: _currentTick,
+          until: until,
+          now: now,
+          ticksPerSecond: _ticksPerSecond,
+          enabled: _audible,
+        );
+      }
       if (_listening) {
         for (final i in _judge.expire(
           _currentTick,
@@ -194,6 +274,7 @@ class _GameScreenState extends State<GameScreen>
     final frame = _frame;
     _frame = null;
     if (!_playing) return;
+    if (frame != null) _listenForNotes(frame, level);
     if (_onsets.feed(level, frequency)) {
       _pluckTick = _clock - _micLatency * _ticksPerSecond;
     }
@@ -211,19 +292,41 @@ class _GameScreenState extends State<GameScreen>
       ticksPerSecond: _ticksPerSecond,
     );
     _frame = null;
-    if (index != null) {
-      _pluckTick = null;
-      setState(() {
-        _waited = null;
-        _feedback.add(
-          FeedbackMark(
-            _judge.verdicts[index]!,
-            _notes[index].note.s - 1,
-            _seconds,
-          ),
-        );
-      });
+    if (index != null) _hit(index);
+  }
+
+  /// Checks each note due about now for itself in [frame]: this still hears
+  /// the guitar when the backing is louder than it.
+  void _listenForNotes(List<double> frame, double rms) {
+    final at = _clock - _micLatency * _ticksPerSecond;
+    for (var i = _judge.firstOpen ?? _notes.length; i < _notes.length; i++) {
+      if (_judge.verdicts[i] != null) continue;
+      final offset = (at - _judge.starts[i]) / _ticksPerSecond;
+      // Listened for a little before its early window, to learn how quiet
+      // it was before the pluck.
+      if (offset < -NoteJudge.earlyWindow - .3) break;
+      if (offset > NoteJudge.lateWindow && !_practicing) continue;
+      final frequency = _judge.frequencies[i];
+      if (!_expected.heard(i, frame, _sampleRate, frequency, rms)) continue;
+      if (_judge.pluckNote(i, at, ticksPerSecond: _ticksPerSecond)) {
+        _hit(i);
+        return;
+      }
     }
+  }
+
+  void _hit(int index) {
+    _pluckTick = null;
+    setState(() {
+      _waited = null;
+      _feedback.add(
+        FeedbackMark(
+          _judge.verdicts[index]!,
+          _notes[index].note.s - 1,
+          _seconds,
+        ),
+      );
+    });
   }
 
   void _toggle() {
@@ -236,6 +339,7 @@ class _GameScreenState extends State<GameScreen>
       _playing = !_playing;
       _countdown = 0;
     });
+    _resound();
   }
 
   void _restart() {
@@ -244,10 +348,12 @@ class _GameScreenState extends State<GameScreen>
       _playing = _started;
       _countdown = 0;
       _judge.reset();
+      _expected.reset();
       _feedback.clear();
       _pluckTick = null;
       _waited = null;
     });
+    _resound();
   }
 
   @override
@@ -259,6 +365,7 @@ class _GameScreenState extends State<GameScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _engine.stop();
+    _sound.dispose();
     _ticker.dispose();
     super.dispose();
   }
@@ -507,6 +614,20 @@ class _GameScreenState extends State<GameScreen>
             ],
           ),
         ),
+        _soundSwitch(
+          key: 'game-metronome',
+          on: _metronome,
+          icon: Icons.av_timer_rounded,
+          label: 'المترونوم',
+          onChanged: (on) => _metronome = on,
+        ),
+        _soundSwitch(
+          key: 'game-backing',
+          on: _backing,
+          icon: Icons.music_note_rounded,
+          label: 'المرافقة الموسيقية',
+          onChanged: (on) => _backing = on,
+        ),
         IconButton(
           key: const ValueKey('game-restart'),
           tooltip: 'إعادة من البداية',
@@ -527,9 +648,40 @@ class _GameScreenState extends State<GameScreen>
               ),
           ],
           onChanged: (speed) {
-            if (speed != null) setState(() => _speed = speed);
+            if (speed == null) return;
+            setState(() => _speed = speed);
+            _resound();
           },
         ),
+      ],
+    ),
+  );
+
+  /// A sound on/off switch: gold while on, crossed out and dim while off.
+  Widget _soundSwitch({
+    required String key,
+    required bool on,
+    required IconData icon,
+    required String label,
+    required void Function(bool) onChanged,
+  }) => IconButton(
+    key: ValueKey(key),
+    tooltip: on ? 'إيقاف $label' : 'تشغيل $label',
+    isSelected: on,
+    visualDensity: VisualDensity.compact,
+    onPressed: () {
+      setState(() => onChanged(!on));
+      _resound();
+    },
+    icon: Stack(
+      alignment: Alignment.center,
+      children: [
+        Icon(icon, color: on ? AppTheme.gold : Colors.white38),
+        if (!on)
+          Transform.rotate(
+            angle: -.8,
+            child: Container(width: 24, height: 2, color: Colors.white54),
+          ),
       ],
     ),
   );
@@ -673,6 +825,22 @@ class _GameScreenState extends State<GameScreen>
       'نستمع إلى عزفك عبر الميكروفون: الصوت الصحيح في الوقت الصحيح.',
       textAlign: TextAlign.center,
       style: TextStyle(color: AppTheme.cream, fontSize: 14),
+    ),
+    const SizedBox(height: 6),
+    const Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.headphones_rounded, size: 16, color: AppTheme.gold),
+        SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            'مع السماعات يكون التعرّف على عزفك أدق.',
+            key: ValueKey('game-headphones-tip'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppTheme.gold, fontSize: 12),
+          ),
+        ),
+      ],
     ),
     const SizedBox(height: 18),
     SizedBox(
