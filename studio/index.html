@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css?v=2026-09-27.1957">
-<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-09-27.1957"}}</script>
+<link rel="stylesheet" href="studio.css?v=2026-10-07.1218">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-10-07.1218"}}</script>
 </head>
 <body>
 <header>
@@ -22,7 +22,14 @@
 
 <section id="drop" class="drop">
   <p><strong>Aufnahme hierher ziehen</strong> (MP3, WAV, M4A …) oder oben öffnen.</p>
-  <p class="hint">Am besten: nur die Gitarre, eine Melodie, einzeln gespielte Noten, gleichmäßiges Tempo.
+  <div class="mode-choice" role="radiogroup" aria-label="Art der Aufnahme">
+    <label><input type="radio" name="open-mode" value="single" checked>
+      <span><strong>Eine Stimme</strong> · nur die Melodie, z. B. deine Gitarre allein</span></label>
+    <label><input type="radio" name="open-mode" value="song">
+      <span><strong>Ganzer Song</strong> · die Melodie aus Begleitung, Akkorden und Bass heraushören</span></label>
+  </div>
+  <p class="hint">Am besten: einzeln gespielte Noten, gleichmäßiges Tempo. Bei einem ganzen Song wird die Hauptstimme gesucht;
+    danach kannst du sie vereinfachen und in eine bequeme Lage transponieren.
     Die Aufnahme bleibt auf deinem Rechner, nichts wird hochgeladen.</p>
   <p class="hint">Gedacht für PC oder Laptop (Chrome, Edge, Safari, Firefox); auf dem Handy geht es auch, nur langsamer.</p>
 </section>
@@ -54,6 +61,15 @@
       <button id="shift-right" class="button small" title="Alle Noten einen Schritt später (z. B. für einen Auftakt)">1 ⟶</button>
       <button id="suggest-chords" class="button small" title="Akkorde für die Begleitung aus der Melodie vorschlagen">Akkorde vorschlagen</button>
     </div>
+  </section>
+
+  <section class="arrange" id="arrange">
+    <label>Erkennung <select id="mode">
+      <option value="single">Eine Stimme</option><option value="song">Ganzer Song (Melodie heraushören)</option></select></label>
+    <label>Vereinfachen <select id="simplify">
+      <option value="0">aus</option><option value="1">Verzierungen weg</option><option value="2">stark</option></select></label>
+    <label>Transponieren <select id="transpose"></select></label>
+    <p class="hint" id="arrange-hint">Berechnet die Noten neu aus der Aufnahme · rückgängig mit <kbd>Strg</kbd>+<kbd>Z</kbd></p>
   </section>
 
   <section class="transport">
@@ -115,6 +131,6 @@
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js?v=2026-09-27.1957"></script>
+<script type="module" src="studio.js?v=2026-10-07.1218"></script>
 </body>
 </html>

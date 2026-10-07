@@ -2,7 +2,7 @@
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
   CHORD_QUALITIES, ROOT_NAMES, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
-  hz, melodyOf, midiOf, noteName, parseChord, positions, slug, suggestChords, toJson,
+  hz, midiOf, noteName, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord,
 } from './transcribe.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,6 +19,8 @@ const state = {
   selectedChord: -1,
   /** What Basic Pitch heard, kept to fit the grid again with a new tempo. */
   detected: null,
+  /** How the notes came from it: recognition mode, simplify level, transposition. */
+  arrange: { mode: 'single', simplify: 0, transpose: 0 },
   /** The recording, and the time in it where tick 0 lies. */
   audio: null,
   offset: 0,
@@ -82,13 +84,15 @@ async function openAudio(file) {
     });
     diagnose(false, `${detected.length} Töne gehört`);
     state.detected = detected;
-    const melody = melodyOf(detected);
+    const mode = document.querySelector('input[name="open-mode"]:checked')?.value ?? 'single';
+    state.arrange = { mode, simplify: 0, transpose: 0 };
+    const melody = pickMelody(detected, mode);
     if (!melody.length) throw new Error('In der Aufnahme wurden keine Gitarrennoten gefunden.');
     const tempo = detectTempo(melody, { ticksPerBeat: 4 });
     const title = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
     state.meta = { id: slug(title), title, artist: '', bpm: tempo.bpm, ticksPerBeat: 4, beatsPerBar: 4 };
     state.offset = tempo.offset;
-    setNotes(chartNotes(detected, { ...tempo, ticksPerBeat: 4 }).map((n) => ({ ...n, fingerAuto: true })));
+    setNotes(chartNotes(detected, { ...tempo, ticksPerBeat: 4, ...state.arrange }).map((n) => ({ ...n, fingerAuto: true })));
     state.chords = [];
     undo.length = redo.length = 0;
     state.edited = false;
@@ -117,6 +121,7 @@ async function openJson(file) {
     setNotes(data.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger ?? null, fingerAuto: n.finger == null })));
     state.chords = (data.chords ?? []).map((c) => ({ t: c.t, d: c.d, name: c.name })).sort((a, b) => a.t - b.t);
     state.detected = null;
+    state.arrange = { mode: 'single', simplify: 0, transpose: 0 };
     undo.length = redo.length = 0;
     state.edited = false;
     openEditor(`${state.notes.length} Noten${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} geladen`);
@@ -262,6 +267,14 @@ function writeMeta() {
   $('bpm').value = state.meta.bpm;
   $('beats-per-bar').value = state.meta.beatsPerBar;
   $('requantize').disabled = !state.detected;
+  writeArrange();
+}
+function writeArrange() {
+  $('bpm').value = state.meta.bpm;
+  $('arrange').hidden = !state.detected;
+  $('mode').value = state.arrange.mode;
+  $('simplify').value = state.arrange.simplify;
+  $('transpose').value = state.arrange.transpose;
 }
 function readMeta() {
   state.meta.title = $('title').value.trim();
@@ -289,11 +302,42 @@ $('requantize').addEventListener('click', () => {
   if (!state.detected) return;
   if (state.edited && !confirm('Die Noten werden neu aus der Aufnahme berechnet, deine Korrekturen gehen verloren. Weiter?')) return;
   change(() => {
-    state.notes = chartNotes(state.detected, { bpm: state.meta.bpm, offset: state.offset, ticksPerBeat: state.meta.ticksPerBeat })
+    state.notes = chartNotes(state.detected, { bpm: state.meta.bpm, offset: state.offset, ticksPerBeat: state.meta.ticksPerBeat, ...state.arrange })
       .map((n) => ({ ...n, fingerAuto: true }));
   });
   setStatus(`Neu berechnet mit ${state.meta.bpm} BPM`);
 });
+
+// Recognition mode, simplifying and transposing: the notes come anew from
+// what was heard, which an undo brings back.
+for (let k = -12; k <= 12; k++) {
+  const label = k === 0 ? '0 (Original)' : `${k > 0 ? '+' : '−'}${Math.abs(k)}${Math.abs(k) === 12 ? ' (Oktave)' : ''}`;
+  $('transpose').append(new Option(label, k));
+}
+for (const id of ['mode', 'simplify', 'transpose']) $(id).addEventListener('change', rearrange);
+function rearrange() {
+  if (!state.detected) return;
+  const before = state.arrange;
+  const next = { mode: $('mode').value, simplify: +$('simplify').value, transpose: +$('transpose').value };
+  let tempoText = '';
+  change(() => {
+    state.arrange = next;
+    if (next.mode !== before.mode) {
+      // Another melody may sit on another grid.
+      const tempo = detectTempo(pickMelody(state.detected, next.mode), { ticksPerBeat: state.meta.ticksPerBeat });
+      if (tempo.bpm !== state.meta.bpm) tempoText = ` · Tempo ${tempo.bpm} BPM`;
+      state.meta.bpm = tempo.bpm;
+      state.offset = tempo.offset;
+    }
+    state.notes = chartNotes(state.detected, { bpm: state.meta.bpm, offset: state.offset, ticksPerBeat: state.meta.ticksPerBeat, ...next })
+      .map((n) => ({ ...n, fingerAuto: true }));
+    const shift = next.transpose - before.transpose;
+    if (shift) state.chords = state.chords.map((c) => ({ ...c, name: transposeChord(c.name, shift) }));
+    state.selected = -1;
+  });
+  writeArrange();
+  setStatus(`${state.notes.length} Noten${tempoText}`);
+}
 for (const [id, step] of [['shift-left', -1], ['shift-right', 1]]) {
   $(id).addEventListener('click', () => {
     if (step < 0 && state.notes.some((n) => n.t === 0)) return setStatus('Die erste Note ist schon am Anfang.');
@@ -318,8 +362,10 @@ function refinger() {
 }
 
 /** Applies an edit so that it can be undone. */
-const snapshot = () =>
-  JSON.stringify({ notes: state.notes, chords: state.chords, selected: state.selected, selectedChord: state.selectedChord });
+const snapshot = () => JSON.stringify({
+  notes: state.notes, chords: state.chords, selected: state.selected, selectedChord: state.selectedChord,
+  arrange: state.arrange, bpm: state.meta.bpm, offset: state.offset,
+});
 
 function change(edit) {
   undo.push(snapshot());
@@ -344,6 +390,10 @@ function restore(from, to) {
   state.chords = saved.chords ?? [];
   state.selected = Math.min(saved.selected, state.notes.length - 1);
   state.selectedChord = Math.min(saved.selectedChord ?? -1, state.chords.length - 1);
+  state.arrange = saved.arrange;
+  state.meta.bpm = saved.bpm;
+  state.offset = saved.offset;
+  writeArrange();
   state.edited = true;
   inspect();
   draw();

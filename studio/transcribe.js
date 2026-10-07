@@ -53,12 +53,86 @@ export function melodyOf(notes, { together = 0.06 } = {}) {
 }
 
 /**
+ * The melody of a whole song, with accompaniment and bass around it: the
+ * one line through the detected notes that is loud, sits high, moves in
+ * small steps and does not start under a melody note still ringing — a
+ * best path (dynamic programming) over all notes, one note at a time.
+ */
+export function melodyTrack(notes, { gap = 0.08, window = 4 } = {}) {
+  const lowest = OPEN_STRINGS[5], highest = OPEN_STRINGS[0] + MAX_FRET + 5;
+  const playable = notes.filter((n) => n.midi >= lowest && n.midi <= highest && n.duration > 0.04);
+  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
+  const loud = median(playable.map((n) => n.amplitude));
+  const all = mergeGlitches(playable.filter((n) => n.amplitude >= 0.5 * loud))
+    .sort((a, b) => a.start - b.start || b.midi - a.midi);
+  if (!all.length) return [];
+  // The melody's register: from a fourth below where the upper part of
+  // the notes lies; notes far below it are likely bass and chords.
+  const pitches = all.map((n) => n.midi).sort((a, b) => a - b);
+  const floor = pitches[Math.floor(pitches.length * 0.75)] - 5;
+  // Notes starting together with each note.
+  const together = all.map((n, i) => {
+    const out = [];
+    for (let j = i - 1; j >= 0 && all[j].start > n.start - 0.06; j--) out.push(j);
+    for (let j = i + 1; j < all.length && all[j].start < n.start + 0.06; j++) out.push(j);
+    return out;
+  });
+  const overtone = (i, louder) => together[i].some((j) =>
+    [12, 19, 24, 28].includes(all[i].midi - all[j].midi) && all[j].amplitude > all[i].amplitude * louder);
+  const salience = all.map((n, i) => {
+    const height = (n.midi - floor) / 12;
+    const place = height < 0 ? Math.max(-1.2, height) * 0.9 : Math.min(0.5, height) * 0.2;
+    // The tune is mostly the top voice; overtones above it do not count.
+    const top = !together[i].some((j) => all[j].midi > n.midi && !overtone(j, 1));
+    return n.amplitude / loud - 0.85 + place + 0.1 * Math.min(1, n.duration / 0.4) +
+      (top ? 0.15 : 0) - (overtone(i, 1.5) ? 0.4 : 0);
+  });
+  const step = (a, b) => {
+    const jump = Math.abs(b.midi - a.midi);
+    let cost = 0.01 * jump + (jump > 9 ? 0.1 : 0) + (jump > 12 ? 0.3 : 0);
+    // Struck while the melody note before still rings, and well below it:
+    // accompaniment.
+    if (b.start < a.start + a.duration - 0.05 && b.midi < a.midi - 4) cost += 0.35;
+    // The same pitch again while it still rings: the string ringing on.
+    if (b.midi === a.midi && b.start < a.start + a.duration && b.amplitude < a.amplitude * 0.9) cost += 0.5;
+    return cost;
+  };
+  const best = new Array(all.length), from = new Array(all.length);
+  let doneBest = 0, doneArg = -1, done = 0; // best path among notes outside the window
+  for (let i = 0; i < all.length; i++) {
+    const b = all[i];
+    while (done < i && all[done].start < b.start - window) {
+      if (best[done] > doneBest) { doneBest = best[done]; doneArg = done; }
+      done++;
+    }
+    let value = doneBest, arg = doneArg;
+    for (let j = done; j < i; j++) {
+      if (all[j].start > b.start - gap) break;
+      const v = best[j] - step(all[j], b);
+      if (v > value) { value = v; arg = j; }
+    }
+    best[i] = salience[i] + value;
+    from[i] = arg;
+  }
+  let i = best.indexOf(Math.max(...best));
+  const melody = [];
+  for (; i >= 0; i = from[i]) melody.push(all[i]);
+  melody.reverse();
+  // Accompaniment the path took in the melody's rests lies far below the
+  // tune around it.
+  return melody.filter((n) => {
+    const around = melody.filter((o) => o !== n && Math.abs(o.start - n.start) < window).map((o) => o.midi);
+    return around.length < 3 || n.midi > median(around) - 10;
+  });
+}
+
+/**
  * A pluck often starts a little off pitch and settles a moment later; the
  * detector then hears a short note and the real one right after. Those
  * become one note, starting with the pluck.
  */
 function mergeGlitches(notes) {
-  const sorted = [...notes].sort((a, b) => a.start - b.start);
+  const sorted = notes.map((n) => ({ ...n })).sort((a, b) => a.start - b.start);
   const out = [];
   for (let i = 0; i < sorted.length; i++) {
     const n = sorted[i];
@@ -113,19 +187,55 @@ export function detectTempo(melody, { ticksPerBeat = 4 } = {}) {
 
   // Fit grid and start note by note (least squares over the notes so far),
   // each placed with the grid found before it: a small error in the first
-  // guess cannot add up over the song.
+  // guess cannot add up over the song. Notes far off the grid (a late
+  // detection, a grace note) are left out of the fit.
   let tick = beat / ticksPerBeat, offset = starts[0];
-  const ks = [0];
+  const xs = [0], ys = [starts[0]];
   for (let i = 1; i < starts.length; i++) {
-    ks.push(Math.round((starts[i] - offset) / tick));
-    const n = i + 1, xs = ks, ys = starts.slice(0, n);
+    const k = Math.round((starts[i] - offset) / tick);
+    if (Math.abs(starts[i] - offset - k * tick) > 0.3 * tick && xs.length >= 4) continue;
+    xs.push(k);
+    ys.push(starts[i]);
+    const n = xs.length;
     const mk = xs.reduce((a, b) => a + b) / n, mt = ys.reduce((a, b) => a + b) / n;
     let sxy = 0, sxx = 0;
-    xs.forEach((k, j) => { sxy += (k - mk) * (ys[j] - mt); sxx += (k - mk) ** 2; });
+    xs.forEach((x, j) => { sxy += (x - mk) * (ys[j] - mt); sxx += (x - mk) ** 2; });
     if (sxx > 0 && n >= 4) {
       tick = sxy / sxx;
       offset = mt - tick * mk;
     }
+  }
+  // Then all notes again on the grid found, a few times over.
+  for (let round = 0; round < 3; round++) {
+    const fx = [], fy = [];
+    starts.forEach((t) => {
+      const k = Math.round((t - offset) / tick);
+      if (Math.abs(t - offset - k * tick) <= 0.25 * tick) { fx.push(k); fy.push(t); }
+    });
+    const n = fx.length;
+    if (n < 4) break;
+    const mk = fx.reduce((a, b) => a + b) / n, mt = fy.reduce((a, b) => a + b) / n;
+    let sxy = 0, sxx = 0;
+    fx.forEach((x, j) => { sxy += (x - mk) * (fy[j] - mt); sxx += (x - mk) ** 2; });
+    if (sxx > 0) { tick = sxy / sxx; offset = mt - tick * mk; }
+  }
+  // With many notes off the grid (a busy recording) the fit can drift; the
+  // tempo that best fits all notes at once then wins.
+  let fine = bpm, fineScore = -1;
+  for (let b = bpm - 1.5; b <= bpm + 1.5; b += 0.05) {
+    const score = fit(b);
+    if (score > fineScore) { fineScore = score; fine = b; }
+  }
+  const fitted = 60 / (tick * ticksPerBeat);
+  if (fit(fitted) < fineScore - 0.05) {
+    tick = 60 / fine / ticksPerBeat;
+    // The grid's phase: the circular mean of the starts.
+    let re = 0, im = 0;
+    starts.forEach((t, i) => {
+      re += weights[i] * Math.cos((2 * Math.PI * t) / tick);
+      im += weights[i] * Math.sin((2 * Math.PI * t) / tick);
+    });
+    offset = (Math.atan2(im, re) / (2 * Math.PI)) * tick;
   }
   // The first note starts the song: the grid's origin is moved onto it.
   const first = Math.round((starts[0] - offset) / tick);
@@ -144,8 +254,15 @@ export function quantize(melody, { bpm, offset, ticksPerBeat = 4 }) {
     // Attacks are heard a little late rather than early: round towards the
     // earlier step a bit more readily.
     const t = Math.max(0, Math.round((n.start - offset) / tick - 0.12));
-    if (out.length && out[out.length - 1].tick === t) continue; // one note per step
-    out.push({ tick: t, midi: n.midi, length: Math.max(1, Math.round(n.duration / tick)), amplitude: n.amplitude });
+    const note = { tick: t, midi: n.midi, length: Math.max(1, Math.round(n.duration / tick)), amplitude: n.amplitude, duration: n.duration };
+    const last = out[out.length - 1];
+    // One note per step: a grace note just before the note it leads to
+    // gives way to it.
+    if (last && last.tick === t) {
+      if (n.duration > last.duration * 1.5) out[out.length - 1] = note;
+      continue;
+    }
+    out.push(note);
   }
   for (let i = 0; i < out.length - 1; i++) {
     const room = out[i + 1].tick - out[i].tick;
@@ -241,10 +358,82 @@ export function assignFingers(frets) {
   return frets.map((f, i) => (f === 0 ? 0 : f - positionsOut[i] + 1));
 }
 
-/** The whole way from detected notes to chart notes {t, s, f, d, finger}. */
-export function chartNotes(detected, { bpm, offset, ticksPerBeat = 4, melodyOnly = true }) {
-  const melody = melodyOnly ? melodyOf(detected) : [...detected].sort((a, b) => a.start - b.start);
-  const grid = quantize(melody, { bpm, offset, ticksPerBeat });
+/**
+ * The melody by recognition mode: 'single' for one voice alone (a guitar
+ * playing the tune), 'song' for a tune within accompaniment, 'all' keeps
+ * every note.
+ */
+export function pickMelody(detected, mode = 'single') {
+  if (mode === 'song') return melodyTrack(detected);
+  if (mode === 'all') return [...detected].sort((a, b) => a.start - b.start);
+  return melodyOf(detected);
+}
+
+/**
+ * Makes a gridded melody ({tick, midi, length}) easier to play.
+ * Level 1 drops ornaments: a lone note of one step that leads straight
+ * into a longer note close by (a grace note), leaving runs alone. Level 2 also drops every note followed within less than an eighth, a note
+ * jumping away and straight back (more than a fifth both ways), and plays
+ * repeated notes as one long note. The note before takes up the time.
+ */
+export function simplify(grid, level = 0, { ticksPerBeat = 4 } = {}) {
+  let out = grid.map((n) => ({ ...n }));
+  if (level <= 0 || out.length < 2) return out;
+  const step = Math.max(1, Math.round(ticksPerBeat / 4));
+  const drop = (keep) => {
+    const kept = [];
+    out.forEach((n, i) => {
+      if (keep(n, i, kept[kept.length - 1])) kept.push(n);
+      else if (kept.length) {
+        const before = kept[kept.length - 1];
+        // The note before rings on through the dropped one.
+        if (before.tick + before.length >= n.tick) before.length = n.tick + n.length - before.tick;
+      }
+    });
+    out = kept;
+  };
+  drop((n, i, before) => {
+    const next = out[i + 1];
+    const ornament = n.length <= step && next && next.tick - n.tick <= step && next.length >= 2 * n.length &&
+      Math.abs(next.midi - n.midi) <= 3 && !(before && before.length <= step);
+    return !ornament;
+  });
+  if (level >= 2) {
+    const eighth = Math.max(1, Math.round(ticksPerBeat / 2));
+    drop((n, i) => i === 0 || i === out.length - 1 || out[i + 1].tick - n.tick >= eighth);
+    drop((n, i, before) => {
+      const next = out[i + 1];
+      return !(before && next && Math.abs(n.midi - before.midi) > 7 && Math.abs(n.midi - next.midi) > 7 &&
+        Math.abs(next.midi - before.midi) <= 7);
+    });
+    drop((n, i, before) => !(before && before.midi === n.midi && before.tick + before.length >= n.tick));
+  }
+  return out;
+}
+
+const LOW = OPEN_STRINGS[5], HIGH = OPEN_STRINGS[0] + MAX_FRET;
+
+/**
+ * Shifts by [semitones], then moves any note the guitar cannot play by
+ * octaves into its range.
+ */
+export function transpose(grid, semitones = 0) {
+  return grid.map((n) => {
+    let midi = n.midi + semitones;
+    while (midi < LOW) midi += 12;
+    while (midi > HIGH) midi -= 12;
+    return { ...n, midi };
+  });
+}
+
+/**
+ * The whole way from detected notes to chart notes {t, s, f, d, finger}:
+ * mode as in pickMelody, simplify level 0–2, transpose in semitones.
+ */
+export function chartNotes(detected, { bpm, offset, ticksPerBeat = 4, mode = 'single', simplify: level = 0, transpose: shift = 0 }) {
+  const melody = pickMelody(detected, mode);
+  const grid = transpose(simplify(quantize(melody, { bpm, offset, ticksPerBeat }), level, { ticksPerBeat }), shift);
+  if (!grid.length) return [];
   const tab = assignTab(grid.map((n) => n.midi));
   const fingers = assignFingers(tab.map((p) => p.f));
   return grid.map((n, i) => ({ t: n.tick, s: tab[i].s, f: tab[i].f, d: n.length, finger: fingers[i] }));
@@ -274,6 +463,14 @@ export function parseChord(name) {
 /** The name of a chord from its parts. */
 export const chordName = (root, quality, bass = null) =>
   ROOT_NAMES[root] + quality + (bass == null || bass === root ? '' : '/' + ROOT_NAMES[bass]);
+
+/** A chord name moved by [semitones]: `Dm` +2 → `Em`, `C/E` −1 → `B/Eb`. */
+export function transposeChord(name, semitones) {
+  const c = parseChord(name);
+  if (!c) return name;
+  const move = (pc) => (((pc + semitones) % 12) + 12) % 12;
+  return chordName(move(c.root), c.quality, c.bass == null ? null : move(c.bass));
+}
 
 /** The pitch classes of a chord. */
 export const chordTones = (c) => [...new Set(c.intervals.map((i) => (c.root + i) % 12))];

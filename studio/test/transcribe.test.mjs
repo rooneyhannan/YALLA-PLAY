@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
-  midiOf, parseChord, positions, quantize, slug, suggestChords, toJson,
+  melodyTrack, midiOf, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
+  transposeChord,
 } from '../transcribe.js';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url)));
@@ -44,6 +45,63 @@ test('a realistic recording: reverb, noise, a player\'s timing', () => {
     return got && midiOf(got.s, got.f) === midiOf(n.s, n.f);
   }).length;
   assert.ok(right >= 55, `${right} of ${truth.length} notes right`);
+});
+
+test('a whole song: the melody is heard out of chords and bass', () => {
+  const heard = read('./basic_pitch_full_song.json').notes
+    .map(([start, duration, midi, amplitude]) => ({ start, duration, midi, amplitude }));
+  const score = (mode) => {
+    const tempo = detectTempo(mode === 'song' ? melodyTrack(heard) : melodyOf(heard));
+    const chart = chartNotes(heard, { ...tempo, mode });
+    const notes = new Map(chart.map((n) => [n.t, n]));
+    const right = truth.filter((n) => {
+      const got = notes.get(n.t);
+      return got && midiOf(got.s, got.f) === midiOf(n.s, n.f);
+    }).length;
+    return { tempo, right, count: chart.length };
+  };
+  const song = score('song');
+  assert.ok(Math.abs(song.tempo.bpm - 90) <= 0.3, `tempo ${song.tempo.bpm}`);
+  assert.ok(song.right >= 46, `${song.right} of ${truth.length} notes right`);
+  assert.ok(song.count <= 66, `${song.count} notes`);
+  // One voice mode takes the accompaniment for the tune.
+  assert.ok(score('single').right < 30);
+});
+
+test('a whole song mode on a guitar alone still finds the tune', () => {
+  const tempo = detectTempo(melodyTrack(detected));
+  assert.equal(tempo.bpm, 90);
+  const notes = chartNotes(detected, { ...tempo, mode: 'song' });
+  assert.ok(notes.length >= 55 && notes.length <= 57, `${notes.length} notes`);
+});
+
+test('simplify: grace notes go first, then short notes and repeats', () => {
+  const grid = [
+    { tick: 0, midi: 62, length: 3 },
+    { tick: 3, midi: 66, length: 1 }, // grace note into the next
+    { tick: 4, midi: 64, length: 4 },
+    { tick: 8, midi: 65, length: 1 }, // a run of sixteenths stays at level 1
+    { tick: 9, midi: 67, length: 1 },
+    { tick: 10, midi: 69, length: 2 },
+    { tick: 12, midi: 69, length: 4 }, // the same note again
+  ];
+  assert.deepEqual(simplify(grid, 0), grid);
+  const ornamentsOff = simplify(grid, 1);
+  assert.deepEqual(ornamentsOff.map((n) => n.tick), [0, 4, 8, 9, 10, 12]);
+  assert.equal(ornamentsOff[0].length, 4, 'the note before takes up the time');
+  const strong = simplify(grid, 2);
+  assert.deepEqual(strong.map((n) => [n.tick, n.midi, n.length]), [[0, 62, 4], [4, 64, 6], [10, 69, 6]]);
+  assert.deepEqual(grid[0].length, 3, 'the input stays as it was');
+});
+
+test('transpose: by semitones, folded by octaves into the guitar', () => {
+  const grid = [{ tick: 0, midi: 40, length: 1 }, { tick: 1, midi: 76, length: 1 }];
+  assert.deepEqual(transpose(grid, 2).map((n) => n.midi), [42, 78]);
+  assert.deepEqual(transpose(grid, -3).map((n) => n.midi), [49, 73]);
+  assert.deepEqual(transpose(grid, 5).map((n) => n.midi), [45, 69]);
+  assert.equal(transposeChord('Dm', 2), 'Em');
+  assert.equal(transposeChord('C/E', -1), 'B/Eb');
+  assert.equal(transposeChord('A7', 3), 'C7');
 });
 
 test('held notes ring on to the next, long gaps stay rests', () => {
