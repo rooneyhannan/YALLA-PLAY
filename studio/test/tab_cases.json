@@ -1,0 +1,80 @@
+{
+ "about": "Overlapping notes, a note cut by the next on its string, ties over bar lines, 3/4, chords off the notes, text to spell in ASCII",
+ "title": "Prüfung – Akkorde ½",
+ "artist": "فيروز",
+ "bpm": 89.9,
+ "ticksPerBeat": 4,
+ "beatsPerBar": 3,
+ "notes": [
+  {
+   "t": 0,
+   "s": 3,
+   "f": 2,
+   "d": 20,
+   "finger": 2
+  },
+  {
+   "t": 0,
+   "s": 1,
+   "f": 0,
+   "d": 4,
+   "finger": 0
+  },
+  {
+   "t": 4,
+   "s": 2,
+   "f": 3,
+   "d": 3,
+   "finger": 3
+  },
+  {
+   "t": 9,
+   "s": 1,
+   "f": 5,
+   "d": 1,
+   "finger": 1
+  },
+  {
+   "t": 10,
+   "s": 1,
+   "f": 7,
+   "d": 15,
+   "finger": 4
+  },
+  {
+   "t": 30,
+   "s": 6,
+   "f": 3,
+   "d": 2
+  },
+  {
+   "t": 31,
+   "s": 6,
+   "f": 5,
+   "d": 5,
+   "finger": 1
+  }
+ ],
+ "chords": [
+  {
+   "t": 0,
+   "d": 12,
+   "name": "Dm"
+  },
+  {
+   "t": 6,
+   "d": 6,
+   "name": "A7"
+  },
+  {
+   "t": 12,
+   "d": 24,
+   "name": "C/E"
+  },
+  {
+   "t": 40,
+   "d": 4,
+   "name": "Bb"
+  }
+ ]
+}

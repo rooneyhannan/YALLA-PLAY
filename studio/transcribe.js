@@ -479,16 +479,12 @@ const KEY_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2
 const KEY_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
 
 /**
- * Suggests chords for a melody, as the app does when a song has none: the
- * key by the Krumhansl profiles, then per half bar the triad of the key
- * that holds most of the melody, staying on the chord before when that
- * fits as well. Same chords in a row become one. Returns [{t, d, name}].
+ * The key of chart notes ({s, f, d}) by the Krumhansl profiles: {tonic, minor},
+ * tonic as pitch class 0 = C … 11 = B.
  */
-export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {}) {
-  if (!notes.length) return [];
-  const pc = (n) => midiOf(n.s, n.f) % 12;
+export function findKey(notes) {
   const weight = new Array(12).fill(0);
-  for (const n of notes) weight[pc(n)] += n.d;
+  for (const n of notes) weight[midiOf(n.s, n.f) % 12] += n.d;
   let key = { tonic: 0, minor: false }, bestKey = -Infinity;
   for (let tonic = 0; tonic < 12; tonic++) {
     for (const minor of [false, true]) {
@@ -498,6 +494,19 @@ export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {})
       if (s > bestKey) { bestKey = s; key = { tonic, minor }; }
     }
   }
+  return key;
+}
+
+/**
+ * Suggests chords for a melody, as the app does when a song has none: the
+ * key by the Krumhansl profiles, then per half bar the triad of the key
+ * that holds most of the melody, staying on the chord before when that
+ * fits as well. Same chords in a row become one. Returns [{t, d, name}].
+ */
+export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {}) {
+  if (!notes.length) return [];
+  const pc = (n) => midiOf(n.s, n.f) % 12;
+  const key = findKey(notes);
   const scale = key.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
   const candidates = [];
   for (let d = 0; d < 7; d++) {

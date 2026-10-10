@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css?v=2026-10-07.1218">
-<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-10-07.1218"}}</script>
+<link rel="stylesheet" href="studio.css?v=2026-10-10.1154">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-10-10.1154", "./guitarpro.js": "./guitarpro.js?v=2026-10-10.1154"}}</script>
 </head>
 <body>
 <header>
@@ -17,6 +17,7 @@
     <label class="button">📄 JSON öffnen
       <input type="file" id="open-json" accept=".json,application/json" hidden></label>
     <button id="save-json" class="button primary" disabled>⬇ JSON speichern</button>
+    <button id="save-gp5" class="button" disabled title="Tabulatur für Guitar Pro (öffnet auch in TuxGuitar, MuseScore und Songsterr)">⬇ Guitar Pro</button>
   </div>
 </header>
 
@@ -131,6 +132,6 @@
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js?v=2026-10-07.1218"></script>
+<script type="module" src="studio.js?v=2026-10-10.1154"></script>
 </body>
 </html>
