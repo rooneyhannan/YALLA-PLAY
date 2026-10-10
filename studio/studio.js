@@ -4,6 +4,7 @@ import {
   CHORD_QUALITIES, ROOT_NAMES, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
   hz, midiOf, noteName, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord,
 } from './transcribe.js';
+import { gp5 } from './guitarpro.js';
 
 const $ = (id) => document.getElementById(id);
 const FINGER_COLORS = ['#9aa0a6', '#4f8bff', '#3ed8e8', '#a27bff', '#e860c0'];
@@ -169,15 +170,22 @@ async function transcribe(decoded, progress) {
 
 $('save-json').addEventListener('click', () => {
   readMeta();
-  const blob = new Blob([exportJson()], { type: 'application/json' });
-  const link = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(blob), download: `${state.meta.id || 'song'}.json`,
-  });
+  download(new Blob([exportJson()], { type: 'application/json' }), `${state.meta.id || 'song'}.json`);
+  state.edited = false;
+});
+// The tab as it stands, for Guitar Pro; the song file stays the one to keep.
+$('save-gp5').addEventListener('click', () => {
+  readMeta();
+  download(new Blob([exportGp5()], { type: 'application/octet-stream' }), `${state.meta.id || 'song'}.gp5`);
+});
+function download(blob, name) {
+  const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
   link.click();
   URL.revokeObjectURL(link.href);
-  state.edited = false;
-  setStatus(`Gespeichert: ${link.download}`);
-});
+  setStatus(`Gespeichert: ${name}`);
+}
+
+const exportGp5 = () => gp5(state.meta, state.notes, state.chords);
 
 function exportJson() {
   return toJson(
@@ -186,7 +194,7 @@ function exportJson() {
     state.chords,
   );
 }
-window.yallaStudio = { state, exportJson }; // for automated tests
+window.yallaStudio = { state, exportJson, exportGp5 }; // for automated tests
 
 // ---------------------------------------------------------------- page
 
@@ -248,6 +256,7 @@ function openEditor(status) {
   $('drop').hidden = true;
   $('editor').hidden = false;
   $('save-json').disabled = false;
+  $('save-gp5').disabled = false;
   writeMeta();
   state.selected = -1;
   state.selectedChord = -1;
