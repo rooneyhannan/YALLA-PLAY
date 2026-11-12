@@ -2,7 +2,7 @@
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
   CHORD_QUALITIES, ROOT_NAMES, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
-  hz, midiOf, noteName, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord,
+  hz, midiOf, noteName, onsetEnergy, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord, withAttacks,
 } from './transcribe.js';
 import { gp5 } from './guitarpro.js';
 
@@ -362,7 +362,18 @@ async function transcribe(decoded, progress) {
   source.buffer = decoded;
   source.connect(offline.destination);
   source.start();
+  // Rumble under the lowest string (handling, wind, the body) goes; the
+  // recording is brought to a full level, however far the microphone was.
+  const rumble = offline.createBiquadFilter();
+  rumble.type = 'highpass';
+  rumble.frequency.value = 65;
+  source.disconnect();
+  source.connect(rumble).connect(offline.destination);
   const samples = (await offline.startRendering()).getChannelData(0).slice();
+  let peak = 0;
+  for (const v of samples) peak = Math.max(peak, Math.abs(v));
+  if (peak > 1e-4) for (let i = 0; i < samples.length; i++) samples[i] *= 0.9 / peak;
+  const onsets = onsetEnergy(samples, 22050);
   let engine = 'wird gestartet';
   progress(0, engine);
   const worker = new Worker(new URL(`./transcribe.worker.js${VERSION}`, import.meta.url), { type: 'module' });
@@ -374,7 +385,7 @@ async function transcribe(decoded, progress) {
         if (data.engine) progress(last, (engine = data.engine));
         else if (data.progress != null) progress((last = data.progress), engine);
         else if (data.error) reject(new Error(data.error));
-        else resolve(data.notes);
+        else resolve(withAttacks(data.notes, onsets));
       };
       worker.onerror = (e) => reject(new Error(e.message || 'Die Notenerkennung konnte nicht starten.'));
       worker.postMessage({ samples }, [samples.buffer]);

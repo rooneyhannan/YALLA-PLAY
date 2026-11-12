@@ -27,6 +27,12 @@ A microphone also hears the guitar body boom at each pluck (around A2) and open 
 along; *Eine Stimme* drops those: a low note just after the pluck of a much higher one, the same low
 pitch coming with the plucks of many different notes, and quiet notes far under the tune.
 
+Before recognition the recording is high-passed at 65 Hz (rumble under the low E string) and brought
+to full level. The Studio also measures in the recording how sharply the sound rises where each note
+starts (`withAttacks`): a pluck rises by 7 dB or more, a string swelling as it rings (or a phone
+turning its volume up as it fades) by 3 dB or less. The same note again without a pluck is the string
+ringing on and lengthens the note before, instead of becoming a new one.
+
 **JSON öffnen** loads a song file again for editing.
 
 **Guitar Pro** saves the tab as it stands as a Guitar Pro 5 file (`.gp5`), which Guitar Pro 5–8,
