@@ -985,6 +985,24 @@ function draw() {
     g.fillText(String(n.f), x0 + 7, y + 5);
   });
 
+  // Handles at both ends of the selection, to drag its length.
+  const box = selectedBox();
+  if (box) {
+    for (const [edge, dir] of [[box.x0 - HANDLE, -1], [box.x1, 1]]) {
+      g.fillStyle = '#f2ca50';
+      roundRect(edge, box.y - 13, HANDLE, 26, 3);
+      g.fill();
+      g.fillStyle = '#241a00';
+      const mid = edge + HANDLE / 2;
+      g.beginPath();
+      g.moveTo(mid + dir * 2.5, box.y);
+      g.lineTo(mid - dir * 1.5, box.y - 4);
+      g.lineTo(mid - dir * 1.5, box.y + 4);
+      g.closePath();
+      g.fill();
+    }
+  }
+
   // Playhead.
   const px = x(state.playhead);
   if (px >= layout.left) {
@@ -1005,9 +1023,34 @@ function roundRect(x0, y0, width, height, r) {
 // Clicks: select a note, drag it along, or place the playhead; a double
 // click on a string adds a note there.
 let drag = null;
+/** The selected note's or chord's span on screen, where its handles are. */
+function selectedBox() {
+  const n = selected(), c = selectedChord();
+  if (n) return { item: n, x0: x(n.t) + 1, x1: Math.max(x(n.t + n.d) - 2, x(n.t) + 21), y: stringY(n.s), step: 1 };
+  if (c) return { item: c, x0: x(c.t) + 1, x1: Math.max(x(c.t + c.d) - 2, x(c.t) + 31), y: layout.chords, step: state.meta.ticksPerBeat, chord: true };
+  return null;
+}
+/** Which handle of the selection is under the pointer: 'start', 'end' or none. */
+function handleAt(px, py, touch) {
+  const box = selectedBox();
+  if (!box || Math.abs(py - box.y) > (touch ? 22 : 15)) return null;
+  const reach = touch ? 16 : 9;
+  if (Math.abs(px - box.x1 - HANDLE / 2) <= reach) return { ...box, edge: 'end' };
+  if (Math.abs(px - box.x0 + HANDLE / 2) <= reach) return { ...box, edge: 'start' };
+  return null;
+}
+const HANDLE = 10;
+
 canvas.addEventListener('pointerdown', (e) => {
   canvas.focus();
   const { px, py } = point(e);
+  const handle = handleAt(px, py, e.pointerType === 'touch');
+  if (handle) {
+    const it = handle.item;
+    drag = { resize: handle.edge, startTick: tickAt(px), note: it, from: it.t, fromD: it.d, step: handle.step, moved: false, chord: handle.chord };
+    canvas.setPointerCapture(e.pointerId);
+    return;
+  }
   const hit = noteAt(px, py), chordHit = chordAt(px, py);
   if (hit >= 0) {
     state.selected = hit;
@@ -1029,7 +1072,36 @@ canvas.addEventListener('pointerdown', (e) => {
   draw();
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (!drag) return;
+  if (!drag) {
+    const { px, py } = point(e);
+    canvas.style.cursor = handleAt(px, py, e.pointerType === 'touch') ? 'ew-resize'
+      : noteAt(px, py) >= 0 || chordAt(px, py) >= 0 ? 'grab' : '';
+    return;
+  }
+  if (drag.resize) {
+    // Lengthen or shorten from either end; the other end stays.
+    const step = drag.step;
+    const by = step * Math.round((tickAt(point(e).px) - drag.startTick) / step);
+    const it = drag.note;
+    let t = drag.from, d = drag.fromD;
+    if (drag.resize === 'end') d = Math.max(step, drag.fromD + by);
+    else {
+      t = Math.min(drag.from + drag.fromD - step, Math.max(0, drag.from + by));
+      d = drag.from + drag.fromD - t;
+    }
+    if (t !== it.t || d !== it.d) {
+      if (!drag.moved) {
+        undo.push(snapshot());
+        redo.length = 0;
+        drag.moved = true;
+      }
+      it.t = t;
+      it.d = d;
+      if (!drag.chord) inspect();
+      draw();
+    }
+    return;
+  }
   // Chords move by whole beats, notes by steps.
   const step = drag.chord ? state.meta.ticksPerBeat : 1;
   const t = Math.max(0, drag.from + step * Math.round((tickAt(point(e).px) - drag.startTick) / step));

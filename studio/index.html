@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css?v=2026-11-12.1407">
-<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1407", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1407"}}</script>
+<link rel="stylesheet" href="studio.css?v=2026-11-12.1416">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1416", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1416"}}</script>
 </head>
 <body>
 <header>
@@ -115,7 +115,7 @@
   </section>
 
   <section class="inspector" id="inspector">
-    <p class="empty" id="inspector-empty">Note oder Akkord anklicken zum Bearbeiten · Doppelklick auf eine Saite fügt eine Note hinzu, Doppelklick auf die Akkordzeile einen Akkord.</p>
+    <p class="empty" id="inspector-empty">Note oder Akkord anklicken zum Bearbeiten, an den gelben Griffen links und rechts länger oder kürzer ziehen · Doppelklick auf eine Saite fügt eine Note hinzu, Doppelklick auf die Akkordzeile einen Akkord.</p>
     <div id="chord-fields" hidden>
       <div class="note-name" id="chord-name">Dm</div>
       <label>Grundton <select id="c-root"></select></label>
@@ -149,6 +149,7 @@
       <li><kbd>Leertaste</kbd> abspielen / anhalten</li>
       <li><kbd>←</kbd> <kbd>→</kbd> Note einen Schritt verschieben · <kbd>Tab</kbd> nächste Note</li>
       <li><kbd>↑</kbd> <kbd>↓</kbd> Bund höher / tiefer · <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> gleicher Ton auf anderer Saite</li>
+      <li>Ausgewählte Note: an den gelben Griffen ◂ ▸ links oder rechts ziehen, um sie länger oder kürzer zu machen</li>
       <li><kbd>[</kbd> <kbd>]</kbd> kürzer / länger · <kbd>0</kbd>–<kbd>4</kbd> Finger · <kbd>A</kbd> Finger automatisch</li>
       <li><kbd>Entf</kbd> löschen · <kbd>Strg</kbd>+<kbd>Z</kbd> rückgängig · <kbd>Strg</kbd>+<kbd>Y</kbd> wiederholen</li>
       <li>Akkord ausgewählt: <kbd>←</kbd> <kbd>→</kbd> einen Schlag verschieben · <kbd>[</kbd> <kbd>]</kbd> einen Schlag kürzer / länger</li>
@@ -157,6 +158,6 @@
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js?v=2026-11-12.1407"></script>
+<script type="module" src="studio.js?v=2026-11-12.1416"></script>
 </body>
 </html>

@@ -12,7 +12,7 @@ Open <https://rooneyhannan.github.io/YALLA-PLAY/studio/> in a desktop browser:
    In the editor, **Erkennung**, **Vereinfachen** (grace notes off, or strongly: short
    notes and repeats too) and **Transponieren** (folded by octaves into the guitar)
    compute the notes anew from what was heard; Ctrl+Z undoes it.
-2. Correct the tab: click a note to edit it, drag it along, double-click a string to add
+2. Correct the tab: click a note to edit it, drag it along, drag the yellow handles at its ends to make it longer or shorter (chords too, by beats), double-click a string to add
    one; the waveform above shows where the recording plays. Play back the recording,
    the notes or both.
 3. **JSON speichern**: a `yalla-song/1` file (see `docs/song-format.md`) for
