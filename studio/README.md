@@ -39,6 +39,13 @@ the same site and so share this browser's storage (`localStorage`, key `yalla.my
 `yalla-song/1` songs). The song is there on this device and in this browser; the app removes it with
 the bin on its card. A song for everyone still goes into `assets/songs/`.
 
+**🎼 Guitar Pro öffnen** (or dropping a file) reads a Guitar Pro 7/8 file (`.gp`: a ZIP archive with
+`Content/score.gpif`, XML) with `gpread.js`. A file with several guitar tracks asks which one.
+The track's tune (the highest note of each beat), fingers, chord diagrams' names and tempo come in;
+grace notes, muted notes and drums are left out, repeats are read as written. Standard tuning without
+capo keeps the file's strings and frets; another tuning or a capo is laid out anew for standard tuning.
+The grid is sixteenths, or finer where triplets need it. Older formats (`.gpx`, `.gp3`–`.gp5`) are not read.
+
 **JSON öffnen** loads a song file again for editing.
 
 **Guitar Pro** saves the tab as it stands as a Guitar Pro 5 file (`.gp5`), which Guitar Pro 5–8,
@@ -47,6 +54,7 @@ the chords over the beats and the key signature. Held notes go on as tied notes.
 in plain letters (Arabic spelt in Latin ones), as the format has no Unicode.
 
 - `transcribe.js`: melody, tempo, grid, tab and fingers; pure functions.
+- `gpread.js`: the `.gp` reader (ZIP, a small XML reader, the score, one track as a song).
 - `guitarpro.js`: the `.gp5` writer, byte for byte as PyGuitarPro writes version 5.10
   (`test/*.gp5` are its reference files).
 - `studio.js`: the page. `transcribe.worker.js`: Basic Pitch in a worker on WebAssembly (no graphics card needed), falling back to the processor.
