@@ -64,8 +64,8 @@ document.addEventListener('drop', (e) => {
   else openAudio(file);
 });
 
-async function openAudio(file) {
-  if (state.edited && !confirm('Die aktuellen Änderungen gehen verloren. Weiter?')) return;
+async function openAudio(file, { asked = false } = {}) {
+  if (!asked && state.edited && !confirm('Die aktuellen Änderungen gehen verloren. Weiter?')) return;
   diagnose(true, `${browser()} · ${file.name} (${(file.size / 1e6).toFixed(1)} MB)`);
   showProgress('Lese die Aufnahme …', 0);
   try {
@@ -129,6 +129,222 @@ async function openJson(file) {
   } catch (error) {
     alert('Die Datei ist keine gültige Song-Datei:\n' + error.message);
   }
+}
+
+// ---------------------------------------------------------------- recording
+
+/** Recording straight into the Studio: listen back, then convert. */
+const rec = {
+  stream: null, recorder: null, chunks: [], blob: null, url: null,
+  since: 0, clock: null, countdown: null, meter: null, source: null, converted: false,
+};
+const MAX_SECONDS = 15 * 60;
+const recFormat = () => ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm']
+  .find((type) => MediaRecorder.isTypeSupported?.(type)) ?? '';
+const recExtension = (type) => (type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm');
+const recording = () => rec.recorder?.state === 'recording';
+
+$('record').addEventListener('click', async () => {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    return alert('Dein Browser kann hier nicht aufnehmen. Nimm Chrome, Edge, Firefox oder Safari in aktueller Version.');
+  }
+  $('recorder').hidden = false;
+  $('recorder').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (!rec.stream) await listen();
+});
+
+/** Opens the microphone and shows its level, before and during recording. */
+async function listen(deviceId) {
+  stopListening();
+  try {
+    rec.stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+        // A guitar is music, not speech: keep the sound as it is.
+        echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+      },
+    });
+  } catch (error) {
+    setRecState(error.name === 'NotAllowedError'
+      ? 'Kein Zugriff aufs Mikrofon. Erlaube es über das Schloss-Symbol neben der Adresse und versuche es noch einmal.'
+      : 'Kein Mikrofon gefunden: ' + (error.message ?? error), false, true);
+    return;
+  }
+  await fillDevices(rec.stream.getAudioTracks()[0]?.getSettings().deviceId);
+  const audio = audioContext();
+  await audio.resume();
+  rec.source = audio.createMediaStreamSource(rec.stream);
+  const analyser = audio.createAnalyser();
+  analyser.fftSize = 2048;
+  rec.source.connect(analyser);
+  const samples = new Float32Array(analyser.fftSize);
+  let held = 0, loudUntil = 0;
+  const level = $('rec-level');
+  const show = () => {
+    analyser.getFloatTimeDomainData(samples);
+    let peak = 0;
+    for (const v of samples) peak = Math.max(peak, Math.abs(v));
+    held = Math.max(peak, held * 0.92);
+    if (peak > 0.97) loudUntil = Date.now() + 1500;
+    level.style.width = `${Math.min(100, Math.round(Math.sqrt(held) * 100))}%`;
+    level.classList.toggle('loud', Date.now() < loudUntil);
+    rec.meter = requestAnimationFrame(show);
+  };
+  show();
+  if (!recording() && !rec.blob) setRecState('Bereit');
+}
+
+function stopListening() {
+  cancelAnimationFrame(rec.meter);
+  rec.source?.disconnect();
+  rec.stream?.getTracks().forEach((track) => track.stop());
+  rec.stream = rec.source = null;
+  $('rec-level').style.width = '0';
+}
+
+async function fillDevices(current) {
+  const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+  $('rec-device').replaceChildren(...inputs.map((d, i) => new Option(d.label || `Mikrofon ${i + 1}`, d.deviceId, false, d.deviceId === current)));
+}
+$('rec-device').addEventListener('change', (e) => { if (!recording()) listen(e.target.value); });
+
+function setRecState(text, on = false, error = false) {
+  $('rec-state').textContent = text;
+  $('rec-state').classList.toggle('on', on);
+  $('rec-state').classList.toggle('error', error);
+}
+
+$('rec-toggle').addEventListener('click', async () => {
+  if (recording()) return rec.recorder.stop();
+  if (rec.countdown) return stopCountdown('Bereit');
+  if (!rec.stream) await listen($('rec-device').value || undefined);
+  if (!rec.stream) return;
+  if (rec.blob && !rec.converted && !confirm('Die letzte Aufnahme wird verworfen. Neu aufnehmen?')) return;
+  if (!$('rec-countin').checked) return startRecording();
+  let left = 3;
+  setRecState(`Gleich … ${left}`, true);
+  $('rec-toggle').title = 'Vorzählen abbrechen';
+  rec.countdown = setInterval(() => {
+    if (--left > 0) return setRecState(`Gleich … ${left}`, true);
+    stopCountdown();
+    startRecording();
+  }, 1000);
+});
+
+function stopCountdown(state) {
+  clearInterval(rec.countdown);
+  rec.countdown = null;
+  $('rec-toggle').title = 'Aufnahme starten';
+  if (state) setRecState(state);
+}
+
+function startRecording() {
+  discardRecording();
+  const mimeType = recFormat();
+  rec.chunks = [];
+  try {
+    rec.recorder = new MediaRecorder(rec.stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 192000 });
+  } catch {
+    rec.recorder = new MediaRecorder(rec.stream);
+  }
+  rec.recorder.ondataavailable = (e) => { if (e.data.size) rec.chunks.push(e.data); };
+  rec.recorder.onstop = finishRecording;
+  rec.recorder.start(1000);
+  rec.since = Date.now();
+  $('rec-time').textContent = '0:00';
+  rec.clock = setInterval(() => {
+    const seconds = Math.floor((Date.now() - rec.since) / 1000);
+    $('rec-time').textContent = clock(seconds);
+    if (seconds >= MAX_SECONDS) rec.recorder.stop();
+  }, 250);
+  $('rec-toggle').textContent = '■';
+  $('rec-toggle').title = 'Aufnahme beenden';
+  $('rec-toggle').classList.add('on');
+  $('rec-device').disabled = true;
+  setRecState('● Aufnahme läuft', true);
+}
+
+function finishRecording() {
+  clearInterval(rec.clock);
+  $('rec-toggle').textContent = '●';
+  $('rec-toggle').title = 'Neu aufnehmen';
+  $('rec-toggle').classList.remove('on');
+  $('rec-device').disabled = false;
+  const type = rec.recorder.mimeType || rec.chunks[0]?.type || 'audio/webm';
+  rec.blob = new Blob(rec.chunks, { type });
+  rec.chunks = [];
+  if (!rec.blob.size) {
+    rec.blob = null;
+    return setRecState('Es kam nichts an, bitte noch einmal versuchen.', false, true);
+  }
+  rec.converted = false;
+  rec.url = URL.createObjectURL(rec.blob);
+  $('rec-audio').src = rec.url;
+  $('rec-review').hidden = false;
+  setRecState(`Aufgenommen · ${clock(Math.round((Date.now() - rec.since) / 1000))} min`);
+}
+
+// Chrome writes recordings without their length; the player then cannot
+// seek. Asking for a time far past the end makes it find the length.
+$('rec-audio').addEventListener('loadedmetadata', (e) => {
+  const audio = e.target;
+  if (audio.duration !== Infinity) return;
+  audio.addEventListener('durationchange', () => { audio.currentTime = 0; }, { once: true });
+  audio.currentTime = 1e7;
+});
+
+function discardRecording() {
+  if (rec.url) URL.revokeObjectURL(rec.url);
+  rec.blob = rec.url = null;
+  $('rec-audio').removeAttribute('src');
+  $('rec-audio').load();
+  $('rec-review').hidden = true;
+}
+
+const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+const recName = () => {
+  const d = new Date(), two = (n) => String(n).padStart(2, '0');
+  return `aufnahme-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}`;
+};
+
+$('rec-again').addEventListener('click', () => {
+  rec.converted = true; // asked here already
+  $('rec-toggle').click();
+});
+$('rec-save').addEventListener('click', () => {
+  if (rec.blob) download(rec.blob, `${recName()}.${recExtension(rec.blob.type)}`);
+});
+$('rec-convert').addEventListener('click', () => {
+  if (!rec.blob) return;
+  if (state.edited && !confirm('Die aktuellen Änderungen gehen verloren. Weiter?')) return;
+  $('rec-audio').pause();
+  rec.converted = true;
+  const file = new File([rec.blob], `Aufnahme.${recExtension(rec.blob.type)}`, { type: rec.blob.type });
+  closeRecorder();
+  openAudio(file, { asked: true });
+});
+$('rec-close').addEventListener('click', () => {
+  if (recording() || (rec.blob && !rec.converted)) {
+    if (!confirm('Die Aufnahme wird verworfen. Schließen?')) return;
+  }
+  closeRecorder();
+});
+
+function closeRecorder() {
+  stopCountdown();
+  if (recording()) {
+    rec.recorder.onstop = null;
+    rec.recorder.stop();
+    clearInterval(rec.clock);
+    $('rec-toggle').textContent = '●';
+    $('rec-toggle').classList.remove('on');
+    $('rec-device').disabled = false;
+  }
+  stopListening();
+  discardRecording();
+  setRecState('Bereit');
+  $('rec-time').textContent = '0:00';
+  $('recorder').hidden = true;
 }
 
 /** Set while a recognition runs: stops it. */
@@ -965,4 +1181,6 @@ function follow() {
 }
 
 document.addEventListener('visibilitychange', () => { if (document.hidden && state.playing) stop(); });
-addEventListener('beforeunload', (e) => { if (state.edited) e.preventDefault(); });
+addEventListener('beforeunload', (e) => {
+  if (state.edited || recording() || (rec.blob && !rec.converted)) e.preventDefault();
+});
