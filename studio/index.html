@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css?v=2026-11-12.1416">
-<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1416", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1416"}}</script>
+<link rel="stylesheet" href="studio.css?v=2026-11-12.1437">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1437", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1437"}}</script>
 </head>
 <body>
 <header>
@@ -17,7 +17,8 @@
     <button id="record" class="button primary" title="Mit dem Mikrofon direkt hier aufnehmen">🎙 Aufnehmen</button>
     <label class="button">📄 JSON öffnen
       <input type="file" id="open-json" accept=".json,application/json" hidden></label>
-    <button id="save-json" class="button primary" disabled>⬇ JSON speichern</button>
+    <button id="to-app" class="button primary" disabled title="Den Song in die Bibliothek der Yalla-Guitar-App legen (auf diesem Gerät, in diesem Browser)">➕ In die App</button>
+    <button id="save-json" class="button" disabled>⬇ JSON speichern</button>
     <button id="save-gp5" class="button" disabled title="Tabulatur für Guitar Pro (öffnet auch in TuxGuitar, MuseScore und Songsterr)">⬇ Guitar Pro</button>
   </div>
 </header>
@@ -42,7 +43,7 @@
       <button id="rec-again" class="button">↺ Neu aufnehmen</button>
       <button id="rec-save" class="button">⬇ Aufnahme speichern</button>
     </div>
-    <p class="hint">Nach dem Umwandeln kannst du die Tabulatur korrigieren und oben als <strong>JSON</strong> (für die App) oder als <strong>Guitar Pro</strong> (.gp5) speichern.</p>
+    <p class="hint">Nach dem Umwandeln kannst du die Tabulatur korrigieren, ihr einen Titel geben und sie oben mit <strong>➕ In die App</strong> direkt in die Bibliothek der App legen, oder als <strong>JSON</strong> bzw. <strong>Guitar Pro</strong> (.gp5) speichern.</p>
   </div>
 </section>
 
@@ -158,6 +159,6 @@
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js?v=2026-11-12.1416"></script>
+<script type="module" src="studio.js?v=2026-11-12.1437"></script>
 </body>
 </html>

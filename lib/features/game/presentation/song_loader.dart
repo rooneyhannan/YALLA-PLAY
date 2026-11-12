@@ -17,9 +17,9 @@ class SongLoader extends StatefulWidget {
 }
 
 class _SongLoaderState extends State<SongLoader> {
-  late final Future<SongChart> _chart = SongChart.load(
-    widget.song.chart ?? SongLoader.demoChart,
-  );
+  late final Future<SongChart> _chart = widget.song.source != null
+      ? Future(() => SongChart.parse(widget.song.source!))
+      : SongChart.load(widget.song.chart ?? SongLoader.demoChart);
 
   @override
   Widget build(BuildContext context) => FutureBuilder(

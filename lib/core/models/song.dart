@@ -9,6 +9,10 @@ class Song {
 
   /// Name of the song's chart in assets/songs/, when it has one.
   final String? chart;
+
+  /// The chart itself, a `yalla-song/1` JSON text, for a song added from
+  /// Yalla Studio on this device.
+  final String? source;
   const Song({
     required this.id,
     required this.title,
@@ -18,8 +22,9 @@ class Song {
     this.difficulty = 'مبتدئ',
     this.isPremium = false,
     this.chart,
+    this.source,
   });
-  bool get hasChart => chart != null;
+  bool get hasChart => chart != null || source != null;
 }
 
 const songs = <Song>[
