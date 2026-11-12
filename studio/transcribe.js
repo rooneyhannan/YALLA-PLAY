@@ -48,6 +48,12 @@ export function melodyOf(notes, { together = 0.06 } = {}) {
       n.start < previous.start + previous.duration + 0.1));
     const choice = fresh.length ? fresh : real.length ? real : cluster;
     const top = choice.reduce((a, b) => (b.midi > a.midi ? b : a));
+    // The same note again without a pluck to be heard: the string ringing
+    // on, swelling as strings do. It lengthens the note.
+    if (previous && top.midi === previous.midi && top.attack != null && top.attack < PLUCK_DB) {
+      previous.duration = Math.max(previous.duration, top.start + top.duration - previous.start);
+      continue;
+    }
     // A string still ringing, heard as a new note of the same pitch.
     const tail = previous && previous.midi === top.midi &&
       top.start < previous.start + previous.duration &&
@@ -55,6 +61,42 @@ export function melodyOf(notes, { together = 0.06 } = {}) {
     if (!tail) melody.push(top);
   }
   return withoutBoom(melody);
+}
+
+/**
+ * How sharply the sound rises where a note starts, in dB: the loudest 15 ms
+ * against the 50 ms before, at the sharpest moment near the start (the
+ * detector may place it up to 80 ms late). Measured on the change from
+ * sample to sample, where a pluck is loud and a string ringing is quiet.
+ * A pluck rises by 7 dB or more; a string swelling as it rings, or a
+ * phone turning its volume up, by 3 dB or less.
+ */
+export function onsetEnergy(samples, rate) {
+  const hop = Math.round(rate * 0.005);
+  const energy = new Float32Array(Math.floor(samples.length / hop));
+  for (let f = 0; f < energy.length; f++) {
+    let sum = 0;
+    for (let i = f * hop; i < (f + 1) * hop; i++) {
+      const d = samples[i] - 0.97 * (i ? samples[i - 1] : 0);
+      sum += d * d;
+    }
+    energy[f] = sum / hop + 1e-10;
+  }
+  return { energy, frame: 0.005 };
+}
+export const PLUCK_DB = 5;
+export function withAttacks(notes, { energy, frame }) {
+  return notes.map((n) => {
+    const at = Math.round(n.start / frame);
+    let attack = -Infinity;
+    for (let j = Math.max(12, at - 16); j <= at + 8 && j + 3 <= energy.length; j++) {
+      let before = 0;
+      for (let k = j - 12; k < j - 2; k++) before += energy[k];
+      const after = Math.max(energy[j], energy[j + 1], energy[j + 2]);
+      attack = Math.max(attack, 10 * Math.log10(after / (before / 10)));
+    }
+    return { ...n, attack: Number.isFinite(attack) ? Math.round(attack * 10) / 10 : null };
+  });
 }
 
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;

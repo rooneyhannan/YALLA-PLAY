@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
-  melodyTrack, midiOf, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
-  transposeChord,
+  melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
+  transposeChord, withAttacks,
 } from '../transcribe.js';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url)));
@@ -80,6 +80,30 @@ test('a microphone: the guitar body booming is no note', () => {
   assert.ok(melody.length >= tune.length && melody.length <= tune.length + 4, `${melody.length} notes`);
   const notes = chartNotes(heard, detectTempo(melodyOf(heard)));
   assert.ok(notes.every((n) => n.s <= 2), 'only the two highest strings');
+});
+
+test('a pluck is told from a string swelling as it rings', () => {
+  const rate = 22050, samples = new Float32Array(rate * 2);
+  for (let i = 0; i < samples.length; i++) {
+    const t = i / rate;
+    // A note ringing and slowly swelling, plucked again at 1.5 s.
+    samples[i] = 0.2 * (1 + 0.8 * Math.sin(2 * Math.PI * 1.5 * t)) * Math.sin(2 * Math.PI * 330 * t) +
+      (t >= 1.5 ? 0.5 * Math.exp(-(t - 1.5) * 30) * Math.sin(2 * Math.PI * 3000 * t) : 0);
+  }
+  const [swell, pluck] = withAttacks([{ start: 0.85 }, { start: 1.55 }], onsetEnergy(samples, rate));
+  assert.ok(swell.attack < 5, `swell ${swell.attack} dB`);
+  assert.ok(pluck.attack > 7, `pluck ${pluck.attack} dB`);
+});
+
+test('a long note ringing on is one note, however often it seems to start', () => {
+  const heard = read('./basic_pitch_long_notes.json').notes
+    .map(([start, duration, midi, amplitude, attack]) => ({ start, duration, midi, amplitude, attack }));
+  const E = 64, G = 67, C = 60, D = 62;
+  assert.deepEqual(melodyOf(heard).map((n) => n.midi), [E, E, E, G, G, E, E, E, E, C, D, D, E, G]);
+  const notes = chartNotes(heard, detectTempo(melodyOf(heard)));
+  assert.deepEqual(notes.slice(0, 13).map((n) => n.d), [4, 4, 24, 4, 4, 4, 4, 4, 4, 24, 4, 4, 16]);
+  // Without the attacks measured, the ringing notes come back.
+  assert.ok(melodyOf(heard.map(({ attack, ...n }) => n)).length > 18);
 });
 
 test('a whole song mode on a guitar alone still finds the tune', () => {
