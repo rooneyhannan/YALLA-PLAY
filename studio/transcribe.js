@@ -18,10 +18,15 @@ export const hz = (midi) => 440 * 2 ** ((midi - 69) / 12);
 export function melodyOf(notes, { together = 0.06 } = {}) {
   const lowest = OPEN_STRINGS[5], highest = OPEN_STRINGS[0] + MAX_FRET + 5;
   const playable = notes.filter((n) => n.midi >= lowest && n.midi <= highest && n.duration > 0.04);
+  // The body booming after each pluck goes first: it can be louder than
+  // the notes and would make them look like noise.
+  const body = bodyPitch(playable);
+  const voiced = playable.filter((n) => !boom(n, playable) &&
+    !(body != null && Math.abs(n.midi - body) <= 1 && withPluck(n, playable, 0.35)));
   // Room noise, hum and sympathetic strings come out much quieter than
   // the notes played.
-  const typical = [...playable.map((n) => n.amplitude)].sort((a, b) => a - b)[Math.floor(playable.length / 2)] ?? 0;
-  const sorted = mergeGlitches(playable.filter((n) => n.amplitude >= 0.68 * typical))
+  const typical = median(voiced.map((n) => n.amplitude));
+  const sorted = mergeGlitches(voiced.filter((n) => n.amplitude >= 0.68 * typical))
     .sort((a, b) => a.start - b.start);
   const clusters = [];
   for (const n of sorted) {
@@ -49,7 +54,50 @@ export function melodyOf(notes, { together = 0.06 } = {}) {
       top.amplitude < previous.amplitude * 0.9;
     if (!tail) melody.push(top);
   }
-  return melody;
+  return withoutBoom(melody);
+}
+
+const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
+
+/**
+ * The guitar body booming (around A2), heard by a microphone as a low note
+ * starting just after the pluck of a much higher one.
+ */
+const boom = (n, heard, { below = 9, after = 0.03, within = 0.2 } = {}) => heard.some((o) =>
+  o.midi >= n.midi + below && n.start - o.start >= after && n.start - o.start < within);
+
+/** A low note heard with or just after the pluck of a much higher one. */
+const withPluck = (n, heard, within = 0.2) => heard.some((o) =>
+  o.midi >= n.midi + 9 && n.start - o.start > -0.03 && n.start - o.start < within);
+
+/**
+ * The pitch the guitar body booms at, if a microphone heard it: the same low
+ * note (give or take a semitone) with the plucks of many higher notes,
+ * whichever note was played.
+ */
+export function bodyPitch(notes) {
+  const counts = new Map();
+  for (const n of notes) if (withPluck(n, notes)) counts.set(n.midi, (counts.get(n.midi) ?? 0) + 1);
+  let pitch = null, most = 0;
+  for (const m of counts.keys()) {
+    const around = (counts.get(m - 1) ?? 0) + counts.get(m) + (counts.get(m + 1) ?? 0);
+    if (around > most || (around === most && counts.get(m) > counts.get(pitch))) { most = around; pitch = m; }
+  }
+  return most >= 4 && most >= 0.15 * notes.length ? pitch : null;
+}
+
+/**
+ * Drops low notes nobody played that are left beside one voice: open bass
+ * strings ringing along, the detector hearing a note an octave low. They
+ * lie far under the tune around them and are no louder than it; a low note
+ * played on purpose is struck firmly.
+ */
+function withoutBoom(melody, { below = 9, window = 4 } = {}) {
+  return melody.filter((n) => {
+    const near = melody.filter((o) => o !== n && Math.abs(o.start - n.start) < window);
+    if (near.length < 3 || n.midi > median(near.map((o) => o.midi)) - below) return true;
+    return n.amplitude > 1.1 * median(near.map((o) => o.amplitude));
+  });
 }
 
 /**
@@ -61,7 +109,6 @@ export function melodyOf(notes, { together = 0.06 } = {}) {
 export function melodyTrack(notes, { gap = 0.08, window = 4 } = {}) {
   const lowest = OPEN_STRINGS[5], highest = OPEN_STRINGS[0] + MAX_FRET + 5;
   const playable = notes.filter((n) => n.midi >= lowest && n.midi <= highest && n.duration > 0.04);
-  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
   const loud = median(playable.map((n) => n.amplitude));
   const all = mergeGlitches(playable.filter((n) => n.amplitude >= 0.5 * loud))
     .sort((a, b) => a.start - b.start || b.midi - a.midi);

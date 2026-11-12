@@ -23,6 +23,9 @@ automatic gain are off, so the guitar sounds as it is): a level meter, a choice 
 optional three-second count-in, then ● to start and ■ to stop. Listen back, and **OK, umwandeln**
 recognises it like an opened file; **Neu aufnehmen** tries again, **Aufnahme speichern** keeps the
 raw recording (WebM, or M4A on Safari). Recordings stop by themselves after 15 minutes.
+A microphone also hears the guitar body boom at each pluck (around A2) and open bass strings ringing
+along; *Eine Stimme* drops those: a low note just after the pluck of a much higher one, the same low
+pitch coming with the plucks of many different notes, and quiet notes far under the tune.
 
 **JSON öffnen** loads a song file again for editing.
 

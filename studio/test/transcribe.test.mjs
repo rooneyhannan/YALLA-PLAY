@@ -68,6 +68,20 @@ test('a whole song: the melody is heard out of chords and bass', () => {
   assert.ok(score('single').right < 30);
 });
 
+test('a microphone: the guitar body booming is no note', () => {
+  const heard = read('./basic_pitch_body_boom.json').notes
+    .map(([start, duration, midi, amplitude]) => ({ start, duration, midi, amplitude }));
+  // Jingle Bells, played on the two highest strings only.
+  const E = 64, F = 65, G = 67, C = 60, D = 62;
+  const tune = [E, E, E, E, E, E, E, G, C, D, E, F, F, F, F, F, E, E, E, E, E, D, D, E, D, G];
+  const melody = melodyOf(heard).map((n) => n.midi);
+  assert.ok(melody.every((m) => m >= C), `low notes in ${melody}`);
+  assert.deepEqual([...new Set(melody)].sort(), [...new Set(tune)].sort());
+  assert.ok(melody.length >= tune.length && melody.length <= tune.length + 4, `${melody.length} notes`);
+  const notes = chartNotes(heard, detectTempo(melodyOf(heard)));
+  assert.ok(notes.every((n) => n.s <= 2), 'only the two highest strings');
+});
+
 test('a whole song mode on a guitar alone still finds the tune', () => {
   const tempo = detectTempo(melodyTrack(detected));
   assert.equal(tempo.bpm, 90);
