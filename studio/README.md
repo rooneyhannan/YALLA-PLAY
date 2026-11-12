@@ -33,6 +33,12 @@ starts (`withAttacks`): a pluck rises by 7 dB or more, a string swelling as it r
 turning its volume up as it fades) by 3 dB or less. The same note again without a pluck is the string
 ringing on and lengthens the note before, instead of becoming a new one.
 
+**➕ In die App** puts the song into the Yalla Guitar app's library, under *أغانيّ من الاستوديو*
+("my songs from the Studio"), with no new release of the app: the Studio and the app are served from
+the same site and so share this browser's storage (`localStorage`, key `yalla.mySongs`, a JSON list of
+`yalla-song/1` songs). The song is there on this device and in this browser; the app removes it with
+the bin on its card. A song for everyone still goes into `assets/songs/`.
+
 **JSON öffnen** loads a song file again for editing.
 
 **Guitar Pro** saves the tab as it stands as a Guitar Pro 5 file (`.gp5`), which Guitar Pro 5–8,

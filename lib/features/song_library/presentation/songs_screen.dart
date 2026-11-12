@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/song.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/design_widgets.dart';
+import '../data/my_songs.dart';
 
 class SongsScreen extends StatefulWidget {
   final ValueChanged<Song> onSong, onFavorite;
@@ -103,7 +104,7 @@ class _SongsScreenState extends State<SongsScreen> {
         var query = '';
         return StatefulBuilder(
           builder: (context, refresh) {
-            final results = songs
+            final results = [...MySongs.all(), ...songs]
                 .where(
                   (s) => '${s.title} ${s.artist}'.toLowerCase().contains(
                     query.toLowerCase(),
@@ -163,8 +164,40 @@ class _SongsScreenState extends State<SongsScreen> {
     );
   }
 
+  Future<void> _remove(Song song) async {
+    final remove = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('حذف الأغنية؟'),
+        content: Text(
+          '«${song.title}» ستُحذف من هذا الجهاز. يمكنك إضافتها مجدداً من الاستوديو.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            key: const ValueKey('remove-song-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (remove ?? false) MySongs.remove(song.id);
+  }
+
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: MySongs.changes,
+    builder: (context, _, _) => _library(context, MySongs.all()),
+  );
+
+  Widget _library(
+    BuildContext context,
+    List<Song> mine,
+  ) => SingleChildScrollView(
     key: const PageStorageKey('songs'),
     child: Center(
       child: ConstrainedBox(
@@ -235,10 +268,27 @@ class _SongsScreenState extends State<SongsScreen> {
                   ],
                 ),
               ),
+              if (mine.isNotEmpty) ...[
+                const SizedBox(height: 30),
+                SectionTitle(
+                  'أغانيّ من الاستوديو',
+                  key: const ValueKey('my-songs'),
+                  onAll: () => _collection(MySongs.category, mine),
+                ),
+                SizedBox(
+                  height: 250,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: mine.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 16),
+                    itemBuilder: (context, i) => _songCard(mine[i], mine: true),
+                  ),
+                ),
+              ],
               const SizedBox(height: 30),
               SectionTitle(
                 'الأكثر شعبية',
-                onAll: () => _collection('كل الأغاني', songs),
+                onAll: () => _collection('كل الأغاني', [...mine, ...songs]),
               ),
               SizedBox(
                 height: 250,
@@ -364,13 +414,14 @@ class _SongsScreenState extends State<SongsScreen> {
     ),
   );
 
-  Widget _songCard(Song song) => SizedBox(
+  Widget _songCard(Song song, {bool mine = false}) => SizedBox(
     width: 190,
     child: Material(
       color: Colors.transparent,
       child: InkWell(
         key: ValueKey('song-${song.id}'),
         onTap: () => widget.onSong(song),
+        onLongPress: mine ? () => _remove(song) : null,
         borderRadius: BorderRadius.circular(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,6 +456,24 @@ class _SongsScreenState extends State<SongsScreen> {
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                             ),
+                          ),
+                        ),
+                      ),
+                    if (mine)
+                      Positioned(
+                        top: 5,
+                        right: 5,
+                        child: IconButton(
+                          key: ValueKey('remove-${song.id}'),
+                          tooltip: 'حذف من هذا الجهاز',
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.black54,
+                          ),
+                          onPressed: () => _remove(song),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: Colors.white,
                           ),
                         ),
                       ),

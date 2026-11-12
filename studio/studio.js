@@ -401,6 +401,38 @@ $('save-json').addEventListener('click', () => {
   state.edited = false;
 });
 // The tab as it stands, for Guitar Pro; the song file stays the one to keep.
+// The app is served from the same site and reads its own songs from this
+// browser's storage: a song put there shows in its library at once.
+const MY_SONGS = 'yalla.mySongs';
+$('to-app').addEventListener('click', () => {
+  readMeta();
+  if (!state.meta.title.trim()) {
+    alert('Gib dem Song zuerst einen Titel; so heißt er dann in der App.');
+    return $('title').focus();
+  }
+  if (!state.notes.length) return alert('Der Song hat noch keine Noten.');
+  const song = JSON.parse(exportJson());
+  let list = [];
+  try {
+    list = JSON.parse(localStorage.getItem(MY_SONGS) ?? '[]');
+    if (!Array.isArray(list)) list = [];
+  } catch { list = []; }
+  const at = list.findIndex((s) => s?.id === song.id);
+  if (at >= 0 && !confirm(`In der App gibt es schon einen Song mit der Datei-ID „${song.id}“ („${list[at].title}“). Ersetzen?`)) return;
+  if (at >= 0) list[at] = song;
+  else list.push(song);
+  try {
+    localStorage.setItem(MY_SONGS, JSON.stringify(list));
+  } catch (error) {
+    return alert('Konnte den Song nicht speichern: ' + (error.message ?? error));
+  }
+  state.edited = false;
+  setStatus(`„${song.title}“ ist in der App · Songs › أغانيّ من الاستوديو`);
+  if (confirm(`„${song.title}“ ist jetzt in der Yalla-Guitar-App, unter Songs › „أغانيّ من الاستوديو“.\n\nDie App jetzt öffnen?`)) {
+    window.open('../', 'yalla-app');
+  }
+});
+
 $('save-gp5').addEventListener('click', () => {
   readMeta();
   download(new Blob([exportGp5()], { type: 'application/octet-stream' }), `${state.meta.id || 'song'}.gp5`);
@@ -484,6 +516,7 @@ function openEditor(status) {
   $('editor').hidden = false;
   $('save-json').disabled = false;
   $('save-gp5').disabled = false;
+  $('to-app').disabled = false;
   writeMeta();
   state.selected = -1;
   state.selectedChord = -1;
