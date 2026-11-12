@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css?v=2026-11-12.1339">
-<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1339", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1339"}}</script>
+<link rel="stylesheet" href="studio.css?v=2026-11-12.1359">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1359", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1359"}}</script>
 </head>
 <body>
 <header>
@@ -32,7 +32,8 @@
     <label>Mikrofon <select id="rec-device"></select></label>
     <button id="rec-close" class="button small">Schließen</button>
   </div>
-  <p id="rec-hint" class="hint">Spiel kurz an: der Balken soll sich bewegen, aber nicht rot werden. Dann auf ● drücken, spielen und auf ■ zum Beenden.</p>
+  <p id="rec-hint" class="hint">Spiel kurz an: der Balken soll sich bewegen, aber nicht rot werden. Dann auf ● drücken, spielen und auf ■ zum Beenden.
+    Tipp: Mikrofon bzw. Handy etwa 30 cm vor den Hals halten (dort, wo er auf den Korpus trifft), nicht direkt vors Schallloch; das brummt sonst tief mit.</p>
   <div id="rec-review" class="rec-review" hidden>
     <p><strong>Anhören:</strong> passt die Aufnahme?</p>
     <audio id="rec-audio" controls></audio>
@@ -156,6 +157,6 @@
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js?v=2026-11-12.1339"></script>
+<script type="module" src="studio.js?v=2026-11-12.1359"></script>
 </body>
 </html>
