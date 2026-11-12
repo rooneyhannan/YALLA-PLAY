@@ -18,6 +18,12 @@ Open <https://rooneyhannan.github.io/YALLA-PLAY/studio/> in a desktop browser:
 3. **JSON speichern**: a `yalla-song/1` file (see `docs/song-format.md`) for
    `assets/songs/`.
 
+**🎙 Aufnehmen** records straight from the microphone (echo cancelling, noise suppression and
+automatic gain are off, so the guitar sounds as it is): a level meter, a choice of input, an
+optional three-second count-in, then ● to start and ■ to stop. Listen back, and **OK, umwandeln**
+recognises it like an opened file; **Neu aufnehmen** tries again, **Aufnahme speichern** keeps the
+raw recording (WebM, or M4A on Safari). Recordings stop by themselves after 15 minutes.
+
 **JSON öffnen** loads a song file again for editing.
 
 **Guitar Pro** saves the tab as it stands as a Guitar Pro 5 file (`.gp5`), which Guitar Pro 5–8,

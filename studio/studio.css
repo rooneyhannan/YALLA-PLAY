@@ -17,7 +17,7 @@ body {
   color: var(--text);
   font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
-header, main, .drop, .progress, footer { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+header, main, .drop, .progress, .recorder, footer { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-top: 18px; }
 h1 { margin: 0; font-size: 26px; }
 h1 span { color: var(--gold); }
@@ -88,3 +88,24 @@ canvas { display: block; width: 100%; height: 370px; outline: none; cursor: poin
 kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; background: var(--raised); color: var(--text); }
 footer { margin: 24px auto; color: #8a8f8c; font-size: 12px; }
 footer a { color: var(--cream); }
+
+.recorder { margin-top: 18px; }
+.recorder > * { background: var(--surface); }
+.rec-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  padding: 12px 14px; border: 1px solid var(--gold); border-radius: 14px;
+}
+.rec { color: var(--danger); font-size: 22px; }
+.rec.on { background: var(--danger); color: #fff; border-color: var(--danger); font-size: 16px; }
+.rec-state { font-weight: 600; min-width: 90px; }
+.rec-state.on { color: var(--danger); }
+.meter { flex: 1; min-width: 120px; height: 10px; border-radius: 5px; background: var(--raised); overflow: hidden; }
+#rec-level { height: 100%; width: 0; background: #3ec46d; }
+#rec-level.loud { background: var(--danger); }
+label.inline { flex-direction: row; align-items: center; gap: 6px; }
+#rec-device { max-width: 260px; }
+.recorder > .hint { background: none; margin: 8px 2px; }
+.rec-review { padding: 12px 14px; border: 1px solid #2b2f2c; border-radius: 14px; }
+.rec-review p { margin: 0 0 8px; }
+.rec-review audio { width: 100%; margin-bottom: 10px; }
+.rec-review .hint { margin: 10px 0 0; }
