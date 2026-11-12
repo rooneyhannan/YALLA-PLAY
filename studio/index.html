@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yalla Studio</title>
-<link rel="stylesheet" href="studio.css?v=2026-11-12.1437">
-<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1437", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1437"}}</script>
+<link rel="stylesheet" href="studio.css?v=2026-11-12.1503">
+<script type="importmap">{"imports": {"./transcribe.js": "./transcribe.js?v=2026-11-12.1503", "./guitarpro.js": "./guitarpro.js?v=2026-11-12.1503", "./gpread.js": "./gpread.js?v=2026-11-12.1503"}}</script>
 </head>
 <body>
 <header>
@@ -15,6 +15,8 @@
     <label class="button primary" id="open-audio-label">🎸 Aufnahme öffnen
       <input type="file" id="open-audio" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac" hidden></label>
     <button id="record" class="button primary" title="Mit dem Mikrofon direkt hier aufnehmen">🎙 Aufnehmen</button>
+    <label class="button" title="Eine Guitar-Pro-7/8-Datei (.gp) öffnen und in die Tabulatur der App umwandeln">🎼 Guitar Pro öffnen
+      <input type="file" id="open-gp" accept=".gp" hidden></label>
     <label class="button">📄 JSON öffnen
       <input type="file" id="open-json" accept=".json,application/json" hidden></label>
     <button id="to-app" class="button primary" disabled title="Den Song in die Bibliothek der Yalla-Guitar-App legen (auf diesem Gerät, in diesem Browser)">➕ In die App</button>
@@ -47,8 +49,20 @@
   </div>
 </section>
 
+<dialog id="track-dialog" class="track-dialog">
+  <form method="dialog">
+    <p><strong>Welche Spur?</strong> Die Datei hat mehrere Gitarrenspuren.</p>
+    <select id="track-choice"></select>
+    <div class="actions">
+      <button value="ok" class="button primary">Übernehmen</button>
+      <button value="cancel" class="button">Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+
 <section id="drop" class="drop">
-  <p><strong>Aufnahme hierher ziehen</strong> (MP3, WAV, M4A …), oben öffnen oder mit <strong>🎙 Aufnehmen</strong> direkt hier einspielen.</p>
+  <p><strong>Aufnahme hierher ziehen</strong> (MP3, WAV, M4A …), oben öffnen oder mit <strong>🎙 Aufnehmen</strong> direkt hier einspielen.
+    Eine <strong>Guitar-Pro-Datei (.gp)</strong> kannst du ebenfalls hierher ziehen oder oben öffnen.</p>
   <div class="mode-choice" role="radiogroup" aria-label="Art der Aufnahme">
     <label><input type="radio" name="open-mode" value="single" checked>
       <span><strong>Eine Stimme</strong> · nur die Melodie, z. B. deine Gitarre allein</span></label>
@@ -159,6 +173,6 @@
 </main>
 
 <footer>Notenerkennung: <a href="https://github.com/spotify/basic-pitch-ts">Basic Pitch</a> von Spotify (Apache 2.0) · Format: <code>yalla-song/1</code></footer>
-<script type="module" src="studio.js?v=2026-11-12.1437"></script>
+<script type="module" src="studio.js?v=2026-11-12.1503"></script>
 </body>
 </html>

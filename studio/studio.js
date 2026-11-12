@@ -5,6 +5,7 @@ import {
   hz, midiOf, noteName, onsetEnergy, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord, withAttacks,
 } from './transcribe.js';
 import { gp5 } from './guitarpro.js';
+import { playable, readGp, songFromScore } from './gpread.js';
 
 const $ = (id) => document.getElementById(id);
 const FINGER_COLORS = ['#9aa0a6', '#4f8bff', '#3ed8e8', '#a27bff', '#e860c0'];
@@ -45,6 +46,11 @@ $('open-audio').addEventListener('change', (e) => {
   e.target.value = '';
   if (file) openAudio(file);
 });
+$('open-gp').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) openGp(file);
+});
 $('open-json').addEventListener('change', (e) => {
   const file = e.target.files[0];
   e.target.value = '';
@@ -61,6 +67,8 @@ document.addEventListener('drop', (e) => {
   const file = e.dataTransfer.files[0];
   if (!file) return;
   if (file.name.endsWith('.json')) openJson(file);
+  else if (/\.gp$/i.test(file.name)) openGp(file);
+  else if (/\.(gpx|gp[345])$/i.test(file.name)) alert('Diese Guitar-Pro-Version kann das Studio noch nicht lesen. Speichere die Datei in Guitar Pro 7 oder 8 als .gp, oder schick sie mir.');
   else openAudio(file);
 });
 
@@ -345,6 +353,48 @@ function closeRecorder() {
   setRecState('Bereit');
   $('rec-time').textContent = '0:00';
   $('recorder').hidden = true;
+}
+
+/** A Guitar Pro 7/8 file: one of its guitar tracks becomes the tab. */
+async function openGp(file) {
+  if (state.edited && !confirm('Die aktuellen Änderungen gehen verloren. Weiter?')) return;
+  let score;
+  try {
+    score = await readGp(new Uint8Array(await file.arrayBuffer()));
+  } catch (error) {
+    console.error(error);
+    return alert('Diese Guitar-Pro-Datei konnte nicht gelesen werden:\n' + (error.message ?? error));
+  }
+  const tracks = playable(score);
+  if (!tracks.length) return alert('In der Datei gibt es keine Gitarrenspur mit Noten.');
+  const index = tracks.length === 1 ? tracks[0].index : await chooseTrack(tracks);
+  if (index == null) return;
+  const song = songFromScore(score, index);
+  if (!song.notes.length) return alert('Die gewählte Spur hat keine Noten.');
+  state.meta = song.meta;
+  setNotes(song.notes.map((n) => ({ ...n, fingerAuto: n.finger == null })));
+  state.chords = song.chords;
+  state.detected = null;
+  state.audio = null;
+  state.offset = 0;
+  peaks = null;
+  state.arrange = { mode: 'single', simplify: 0, transpose: 0 };
+  undo.length = redo.length = 0;
+  state.edited = false;
+  const name = score.tracks[index].name;
+  openEditor(`${state.notes.length} Noten aus „${name}“${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} · ${song.meta.bpm} BPM` +
+    (song.retuned ? ' · auf Standardstimmung umgelegt' : ''));
+}
+
+/** Asks which track to take; resolves with its index, or null. */
+function chooseTrack(tracks) {
+  const dialog = $('track-dialog');
+  $('track-choice').replaceChildren(...tracks.map((t) =>
+    new Option(`${t.name} · ${t.notes.length} Noten${t.tuning.length !== 6 ? ` · ${t.tuning.length} Saiten` : ''}`, t.index)));
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok' ? +$('track-choice').value : null), { once: true });
+    dialog.showModal();
+  });
 }
 
 /** Set while a recognition runs: stops it. */
