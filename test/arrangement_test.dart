@@ -94,10 +94,11 @@ void main() {
     }
   });
 
-  test('chords come from the key and hold the melody they sound with', () {
+  test('chords come from the key, one per bar', () {
     expect(arrangement.chords, isNotEmpty);
     for (final c in arrangement.chords) {
       expect(c.chord.tones, hasLength(3));
+      expect(c.length, 16);
     }
   });
 

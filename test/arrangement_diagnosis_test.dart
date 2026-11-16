@@ -121,7 +121,7 @@ String arrangementReport(SongChart chart) {
     ..writeln(
       chart.chords.isEmpty
           ? 'Akkorde: keine im Song – die App wählt selbst, '
-                'einen pro halben Takt.'
+                'einen pro Takt.'
           : 'Akkorde: ${chart.chords.length} aus dem Song.',
     )
     ..writeln();
@@ -164,15 +164,20 @@ String arrangementReport(SongChart chart) {
     ..writeln();
 
   // The chords, stretch by stretch.
-  out.writeln('Akkorde (Melodietöne darin; „reibt“ = Halbton neben Akkordton):');
+  out.writeln(
+    'Akkorde (Melodietöne darin; „reibt“ = Halbton neben Akkordton, '
+    'mindestens einen Schlag lang – kurze Durchgangstöne zählen nicht):',
+  );
   var changes = 0, rubbing = 0;
+  final bars = math.max(1, ((end - lead) / bar).ceil());
   ChordSymbol? previous;
   for (final span in arrangement.chords) {
     final tones = span.chord.tones;
     final heard = _sounding(melody, span.start, span.start + span.length);
     final rubs = [
       for (final pc in heard.keys)
-        if (!tones.contains(pc) &&
+        if (heard[pc]! >= beat &&
+            !tones.contains(pc) &&
             (tones.contains((pc + 1) % 12) || tones.contains((pc + 11) % 12)))
           pc,
     ]..sort();
@@ -187,7 +192,8 @@ String arrangementReport(SongChart chart) {
   }
   out
     ..writeln(
-      '  → $changes Wechsel bei ${arrangement.chords.length} Abschnitten, '
+      '  → $changes Wechsel bei ${arrangement.chords.length} Abschnitten '
+      '(${(changes / bars).toStringAsFixed(1)} pro Takt), '
       '$rubbing Abschnitte mit reibenden Melodietönen',
     )
     ..writeln();
@@ -261,7 +267,7 @@ String arrangementReport(SongChart chart) {
     ..writeln('  Schläge, die wie ein anderer Akkord klingen: ${share(other)}')
     ..writeln('  Schläge ganz ohne Akkord: ${share(silent)}')
     ..writeln(
-      '  Akkordwechsel: $changes, Abschnitte mit Reibung: '
+      '  Akkordwechsel: $changes in $bars Takten, Abschnitte mit Reibung: '
       '$rubbing von ${arrangement.chords.length}',
     );
   return out.toString();

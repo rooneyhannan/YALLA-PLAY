@@ -47,7 +47,7 @@ class Arrangement {
   final List<SoundEvent> events;
 
   /// The chords the backing plays: the song's own, or, when it has none,
-  /// one chosen for each half bar.
+  /// one chosen for each bar.
   final List<ChordSpan> chords;
   const Arrangement._(this.events, this.chords);
 
@@ -80,11 +80,14 @@ class Arrangement {
     }
 
     final given = chords != null && chords.isNotEmpty;
+    final chosen = given
+        ? const <ChordSymbol>[]
+        : _harmonize(melody, firstBeat, barTicks);
     final spans = given
         ? ([...chords]..sort((a, b) => a.start.compareTo(b.start)))
         : [
-            for (final (i, c) in _harmonize(melody, firstBeat, halfBar).indexed)
-              (start: firstBeat + i * halfBar, length: halfBar, chord: c),
+            for (final (i, c) in chosen.indexed)
+              (start: firstBeat + i * barTicks, length: barTicks, chord: c),
           ];
     final last = math.max(
       melody.isEmpty
@@ -156,13 +159,13 @@ class Arrangement {
     return Arrangement._(events, spans);
   }
 
-  /// Picks a chord for every half bar: the triad of the song's key that
+  /// Picks a chord for every bar: the triad of the song's key that
   /// holds most of the melody sounding in it, staying on the chord before
   /// when that fits as well.
   static List<ChordSymbol> _harmonize(
     List<MelodyNote> melody,
     double firstBeat,
-    double halfBar,
+    double bar,
   ) {
     if (melody.isEmpty) return [ChordSymbol.triad(0, minor: false)];
     final key = _key(melody);
@@ -182,11 +185,11 @@ class Arrangement {
     ];
 
     final end = melody.map((n) => n.start + n.length).reduce(math.max);
-    final count = math.max(1, ((end - firstBeat) / halfBar).ceil());
+    final count = math.max(1, ((end - firstBeat) / bar).ceil());
     final chords = <ChordSymbol>[];
     var previous = ChordSymbol.triad(key.tonic, minor: key.minor);
     for (var i = 0; i < count; i++) {
-      final from = firstBeat + i * halfBar, to = from + halfBar;
+      final from = firstBeat + i * bar, to = from + bar;
       final weight = List.filled(12, 0.0);
       for (final n in melody) {
         final overlap =
@@ -223,8 +226,8 @@ class Arrangement {
   }
 
   /// All 24 major and minor keys, best match for the melody first, with
-  /// their Krumhansl-Schmuckler score: how close the runner-up comes shows
-  /// how sure the guess is.
+  /// their Krumhansl-Schmuckler score, the last note counted twice: how
+  /// close the runner-up comes shows how sure the guess is.
   static List<({int tonic, bool minor, double score})> keyRanking(
     List<MelodyNote> melody,
   ) {
