@@ -95443,7 +95443,7 @@ A.aug.prototype={
 $0(){return this.a.d=0},
 $S:0}
 A.auo.prototype={
-$0(){return A.a4k(this.a,"\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a \u0648\u0627\u0644\u0625\u0646\u062c\u0627\u0632\u0627\u062a \u0633\u062a\u062a\u0648\u0641\u0631 \u0642\u0631\u064a\u0628\u0627\u064b. \u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u0623\u063a\u0627\u0646\u064a \u0648\u0627\u0628\u062f\u0623 \u0627\u0644\u0639\u0632\u0641 \u0627\u0644\u0622\u0646.\n\n\u0627\u0644\u0625\u0635\u062f\u0627\u0631 2026-11-12.1437","\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a")},
+$0(){return A.a4k(this.a,"\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a \u0648\u0627\u0644\u0625\u0646\u062c\u0627\u0632\u0627\u062a \u0633\u062a\u062a\u0648\u0641\u0631 \u0642\u0631\u064a\u0628\u0627\u064b. \u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u0623\u063a\u0627\u0646\u064a \u0648\u0627\u0628\u062f\u0623 \u0627\u0644\u0639\u0632\u0641 \u0627\u0644\u0622\u0646.\n\n\u0627\u0644\u0625\u0635\u062f\u0627\u0631 2026-11-16.1316","\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a")},
 $S:0}
 A.Ad.prototype={
 ar(){return new A.Z7()},
@@ -103204,7 +103204,7 @@ B.ahi=new A.bJ("\u0627\u0628\u062f\u0623 \u0627\u0644\u0627\u0633\u062a\u0645\u0
 B.ahk=new A.bJ("\u062d\u0630\u0641 \u0627\u0644\u0623\u063a\u0646\u064a\u0629\u061f",null,null,null,null,null,null,null,null)
 B.acS=new A.j(!0,B.pS,null,null,null,null,12,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.ajb=new A.b9("tuner-footer",t.O)
-B.ahl=new A.bJ("E \xb7 A \xb7 D \xb7 G \xb7 H \xb7 E   \xb7   v2026-11-12.1437",null,B.acS,null,B.h,null,null,null,B.ajb)
+B.ahl=new A.bJ("E \xb7 A \xb7 D \xb7 G \xb7 H \xb7 E   \xb7   v2026-11-16.1316",null,B.acS,null,B.h,null,null,null,B.ajb)
 B.ahm=new A.bJ("\u0627\u0644\u0639\u0632\u0641",null,null,null,null,null,null,null,null)
 B.ahn=new A.bJ("\u0645\u0631\u0629 \u0623\u062e\u0631\u0649",null,null,null,null,null,null,null,null)
 B.aho=new A.bJ("\u062d\u0633\u0646\u0627\u064b",null,null,null,null,null,null,null,null)
