@@ -201,7 +201,12 @@ String arrangementReport(SongChart chart) {
     'Pro Schlag (Akkord | klingt | weggelassen fürs Mikrofon | ergänzt | Bass):',
   );
   var beats = 0, missing = 0, rootless = 0, other = 0, silent = 0;
-  for (var t = lead; t < end; t += beat) {
+  // The backing plays on to the end of the song's last chord.
+  final last = arrangement.chords.fold(
+    end,
+    (a, c) => math.max(a, c.start + c.length),
+  );
+  for (var t = lead; t < last; t += beat) {
     final spans = arrangement.chords.where(
       (c) => c.start <= t + 1e-6 && t < c.start + c.length - 1e-6,
     );
@@ -234,7 +239,8 @@ String arrangementReport(SongChart chart) {
     );
   }
 
-  String share(int n) => '$n von $beats (${(n / beats * 100).round()} %)';
+  String share(int n) =>
+      '$n von $beats (${beats == 0 ? 0 : (n / beats * 100).round()} %)';
   out
     ..writeln()
     ..writeln('Zusammenfassung')
