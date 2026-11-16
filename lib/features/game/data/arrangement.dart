@@ -118,13 +118,11 @@ class Arrangement {
         for (final pc in chord.tones)
           if (!avoid.contains(pc)) 55 + (pc - 55) % 12,
       ];
-      // A tone left out for the player is made up so the chord stays full:
-      // a chosen triad by its seventh, any chord by doubling a tone an
-      // octave up.
-      final seventh = (chord.root + (chord.isMinor ? 10 : 11)) % 12;
-      if (!given && voicing.length < 3 && !avoid.contains(seventh)) {
-        voicing.add(55 + (seventh - 55) % 12);
-      }
+      // A tone left out for the player is made up by doubling one of the
+      // chord's other tones an octave up. Nothing foreign is added: the
+      // guitar plays the missing tone, and a substitute such as the seventh
+      // would turn the chord into another (A minor without A plus G sounds
+      // like C major).
       if (voicing.length < 3 && voicing.isNotEmpty) {
         voicing.add(voicing.reduce(math.min) + 12);
       }
@@ -217,7 +215,8 @@ class Arrangement {
     return chords;
   }
 
-  /// The key of the melody, by the Krumhansl-Schmuckler profiles.
+  /// The key of the melody, by the Krumhansl-Schmuckler profiles, its last
+  /// note weighted as the likely tonic.
   static ({int tonic, bool minor}) _key(List<MelodyNote> melody) {
     final best = keyRanking(melody).first;
     return (tonic: best.tonic, minor: best.minor);
@@ -260,6 +259,15 @@ class Arrangement {
     final weight = List.filled(12, 0.0);
     for (final n in melody) {
       weight[pitchClass(n.frequency)] += n.length;
+    }
+    // The last note counts twice: melodies, Arabic ones above all, come to
+    // rest on their tonic. Without this a long fifth can outweigh it, as A
+    // did in Ba’dak Ala Bali, which ends on D.
+    if (melody.isNotEmpty) {
+      final last = melody.reduce(
+        (a, b) => b.start + b.length > a.start + a.length ? b : a,
+      );
+      weight[pitchClass(last.frequency)] += last.length;
     }
     final ranking = <({int tonic, bool minor, double score})>[];
     for (var tonic = 0; tonic < 12; tonic++) {

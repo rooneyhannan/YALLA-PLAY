@@ -101,6 +101,21 @@ void main() {
     }
   });
 
+  test('the backing adds no tone foreign to the chord', () {
+    // Leaving out the player's pitch must not turn the chord into another,
+    // as a seventh would (A minor without A plus G sounds like C major).
+    for (final e in arrangement.events.where((e) => e.voice == Voice.chord)) {
+      final span = arrangement.chords.lastWhere(
+        (c) => c.start <= e.tick + 1e-6,
+      );
+      expect(
+        span.chord.tones,
+        contains(pitchClass(e.frequency)),
+        reason: 'chord tone at ${e.tick} under ${span.chord}',
+      );
+    }
+  });
+
   test('sounds are synthesized, finite and not clipping', () {
     for (final voice in Voice.values) {
       final samples = synthesize(voice, 220, 48000);

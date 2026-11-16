@@ -30,6 +30,14 @@ void main() {
     }
   });
 
+  test('Ba’dak Ala Bali is heard in D minor, the key it ends in', () {
+    final badak = SongChart.parse(
+      File('assets/songs/badak.json').readAsStringSync(),
+    );
+    final best = Arrangement.keyRanking(_melody(badak)).first;
+    expect((best.tonic, best.minor), (2, true));
+  });
+
   test('reports the backing of $id beat by beat', () {
     final report = arrangementReport(chart);
     // ignore: avoid_print
