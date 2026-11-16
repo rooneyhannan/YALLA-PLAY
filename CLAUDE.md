@@ -11,9 +11,12 @@
 ## Build and publish
 
 - Flutter 3.47.2. Checks: `dart format lib test`, `flutter analyze --no-fatal-infos`, `flutter test`.
-- GitHub Pages serves the repository root of `main`. Rebuild and copy the web
-  app there with `tool/build_web.sh --publish` and commit the result together
-  with source changes; merging then updates https://rooneyhannan.github.io/YALLA-PLAY/.
+- GitHub Pages serves the repository root of `main`. You do not build it
+  yourself: on every push to `main` the "Flutter review build" workflow runs
+  `tool/build_web.sh --publish` and commits the web app to the root with
+  `[skip ci]`. Merging therefore updates https://rooneyhannan.github.io/YALLA-PLAY/
+  a few minutes later. Commit only source changes; do not commit the built
+  files (`main.dart.js`, `index.html`, `canvaskit`, …) in a pull request.
 - The script stamps the build (shown in the tuner footer) and versions the
   loaded scripts so a reload shows the new release despite GitHub Pages caching.
 - Restore generated noise before committing: `git checkout -- build android ios`.
