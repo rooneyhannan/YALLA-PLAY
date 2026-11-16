@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
-  melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
+  findKey, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
   transposeChord, withAttacks,
 } from '../transcribe.js';
 
@@ -204,8 +204,11 @@ test('chords: names, parts and the same table as the app', () => {
 });
 
 test('chords are suggested from the melody, as the app would choose them', () => {
+  // Ba’dak ends on D: heard in D minor, one chord per bar at most.
+  assert.deepEqual(findKey(truth), { tonic: 2, minor: true });
   const chords = suggestChords(truth);
-  assert.deepEqual(chords.slice(0, 3).map((c) => c.name), ['Dm', 'Am', 'C']);
+  assert.deepEqual(chords.slice(0, 3).map((c) => c.name), ['Dm', 'F', 'Gm']);
+  for (const c of chords) assert.equal(c.d % 16, 0);
   // Back to back, covering the song.
   for (let i = 1; i < chords.length; i++) assert.equal(chords[i].t, chords[i - 1].t + chords[i - 1].d);
 });
