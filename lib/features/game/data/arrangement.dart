@@ -219,6 +219,16 @@ class Arrangement {
 
   /// The key of the melody, by the Krumhansl-Schmuckler profiles.
   static ({int tonic, bool minor}) _key(List<MelodyNote> melody) {
+    final best = keyRanking(melody).first;
+    return (tonic: best.tonic, minor: best.minor);
+  }
+
+  /// All 24 major and minor keys, best match for the melody first, with
+  /// their Krumhansl-Schmuckler score: how close the runner-up comes shows
+  /// how sure the guess is.
+  static List<({int tonic, bool minor, double score})> keyRanking(
+    List<MelodyNote> melody,
+  ) {
     const major = [
       6.35,
       2.23,
@@ -251,8 +261,7 @@ class Arrangement {
     for (final n in melody) {
       weight[pitchClass(n.frequency)] += n.length;
     }
-    var best = (tonic: 0, minor: false);
-    var bestScore = double.negativeInfinity;
+    final ranking = <({int tonic, bool minor, double score})>[];
     for (var tonic = 0; tonic < 12; tonic++) {
       for (final isMinor in [false, true]) {
         final profile = isMinor ? minor : major;
@@ -260,12 +269,16 @@ class Arrangement {
         for (var pc = 0; pc < 12; pc++) {
           s += weight[pc] * profile[(pc - tonic) % 12];
         }
-        if (s > bestScore) {
-          bestScore = s;
-          best = (tonic: tonic, minor: isMinor);
-        }
+        ranking.add((tonic: tonic, minor: isMinor, score: s));
       }
     }
-    return best;
+    // Of equal scores the first tried wins, as it always has.
+    int order(({int tonic, bool minor, double score}) k) =>
+        k.tonic * 2 + (k.minor ? 1 : 0);
+    ranking.sort((a, b) {
+      final byScore = b.score.compareTo(a.score);
+      return byScore != 0 ? byScore : order(a).compareTo(order(b));
+    });
+    return ranking;
   }
 }
