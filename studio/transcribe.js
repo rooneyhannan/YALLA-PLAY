@@ -568,12 +568,17 @@ const KEY_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2
 const KEY_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
 
 /**
- * The key of chart notes ({s, f, d}) by the Krumhansl profiles: {tonic, minor},
- * tonic as pitch class 0 = C … 11 = B.
+ * The key of chart notes ({t, s, f, d}) by the Krumhansl profiles: {tonic, minor},
+ * tonic as pitch class 0 = C … 11 = B. As in the app, the last note counts
+ * twice: melodies come to rest on their tonic.
  */
 export function findKey(notes) {
   const weight = new Array(12).fill(0);
   for (const n of notes) weight[midiOf(n.s, n.f) % 12] += n.d;
+  if (notes.length && notes.every((n) => n.t != null)) {
+    const last = notes.reduce((a, b) => (b.t + b.d > a.t + a.d ? b : a));
+    weight[midiOf(last.s, last.f) % 12] += last.d;
+  }
   let key = { tonic: 0, minor: false }, bestKey = -Infinity;
   for (let tonic = 0; tonic < 12; tonic++) {
     for (const minor of [false, true]) {
@@ -588,7 +593,7 @@ export function findKey(notes) {
 
 /**
  * Suggests chords for a melody, as the app does when a song has none: the
- * key by the Krumhansl profiles, then per half bar the triad of the key
+ * key by the Krumhansl profiles, then per bar the triad of the key
  * that holds most of the melody, staying on the chord before when that
  * fits as well. Same chords in a row become one. Returns [{t, d, name}].
  */
@@ -604,14 +609,14 @@ export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {})
   }
   if (key.minor) candidates.push({ root: (key.tonic + 7) % 12, minor: false });
   const tones = (c) => [c.root, (c.root + (c.minor ? 3 : 4)) % 12, (c.root + 7) % 12];
-  const half = (ticksPerBeat * beatsPerBar) / 2;
+  const bar = ticksPerBeat * beatsPerBar;
   const end = Math.max(...notes.map((n) => n.t + n.d));
   const chords = [];
   let previous = { root: key.tonic, minor: key.minor };
-  for (let from = 0; from < end; from += half) {
+  for (let from = 0; from < end; from += bar) {
     const w = new Array(12).fill(0);
     for (const n of notes) {
-      const overlap = Math.min(from + half, n.t + n.d) - Math.max(from, n.t);
+      const overlap = Math.min(from + bar, n.t + n.d) - Math.max(from, n.t);
       if (overlap > 0) w[pc(n)] += overlap;
     }
     const total = w.reduce((a, b) => a + b);
@@ -628,8 +633,8 @@ export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {})
     }
     const name = chordName(previous.root, previous.minor ? 'm' : '');
     const last = chords[chords.length - 1];
-    if (last && last.name === name) last.d += half;
-    else chords.push({ t: from, d: half, name });
+    if (last && last.name === name) last.d += bar;
+    else chords.push({ t: from, d: bar, name });
   }
   return chords;
 }

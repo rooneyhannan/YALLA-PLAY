@@ -94,10 +94,26 @@ void main() {
     }
   });
 
-  test('chords come from the key and hold the melody they sound with', () {
+  test('chords come from the key, one per bar', () {
     expect(arrangement.chords, isNotEmpty);
     for (final c in arrangement.chords) {
       expect(c.chord.tones, hasLength(3));
+      expect(c.length, 16);
+    }
+  });
+
+  test('the backing adds no tone foreign to the chord', () {
+    // Leaving out the player's pitch must not turn the chord into another,
+    // as a seventh would (A minor without A plus G sounds like C major).
+    for (final e in arrangement.events.where((e) => e.voice == Voice.chord)) {
+      final span = arrangement.chords.lastWhere(
+        (c) => c.start <= e.tick + 1e-6,
+      );
+      expect(
+        span.chord.tones,
+        contains(pitchClass(e.frequency)),
+        reason: 'chord tone at ${e.tick} under ${span.chord}',
+      );
     }
   });
 
