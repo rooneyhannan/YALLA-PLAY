@@ -16,7 +16,8 @@
   `tool/build_web.sh --publish` and commits the web app to the root with
   `[skip ci]`. Merging therefore updates https://rooneyhannan.github.io/YALLA-PLAY/
   a few minutes later. Commit only source changes; do not commit the built
-  files (`main.dart.js`, `index.html`, `canvaskit`, …) in a pull request.
+  files (`main.dart.js`, `index.html`, `canvaskit`, …) in a pull request, and
+  branch from a freshly pulled `main`, which now carries these bot commits.
 - The script stamps the build (shown in the tuner footer) and versions the
   loaded scripts so a reload shows the new release despite GitHub Pages caching.
 - Restore generated noise before committing: `git checkout -- build android ios`.

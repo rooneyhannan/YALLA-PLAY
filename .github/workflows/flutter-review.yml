@@ -7,7 +7,8 @@ on:
 permissions:
   contents: write
 # A newer push to main replaces a running build, so only the latest
-# release is published and two publish commits never race.
+# release is published and two publish commits never race. A manual
+# run on main (workflow_dispatch) publishes too.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -34,7 +35,7 @@ jobs:
           path: test/previews
       - name: Build the web app (copied to the repository root on main)
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/main ]]; then
+          if [[ "$GITHUB_EVENT_NAME" != pull_request && "$GITHUB_REF" == refs/heads/main ]]; then
             bash tool/build_web.sh --publish
           else
             bash tool/build_web.sh
@@ -57,7 +58,7 @@ jobs:
             git push
           fi
       - name: Publish the web build to GitHub Pages (main)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
