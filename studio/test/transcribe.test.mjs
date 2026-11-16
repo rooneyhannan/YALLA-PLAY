@@ -170,10 +170,12 @@ test('fingers: one finger per fret, shifting only when needed', () => {
 });
 
 test('the JSON file is what the app reads, and reads back', () => {
+  const file = readFileSync(new URL('../../assets/songs/badak.json', import.meta.url), 'utf8');
   const text = toJson({ id: 'badak', title: 'Ba’dak Ala Bali', artist: 'فيروز', bpm: 90 },
-    truth.map(({ t, s, f, d }) => ({ t, s, f, d })));
-  assert.equal(text, readFileSync(new URL('../../assets/songs/badak.json', import.meta.url), 'utf8'));
+    truth.map(({ t, s, f, d }) => ({ t, s, f, d })), fromJson(file).chords);
+  assert.equal(text, file);
   assert.equal(fromJson(text).notes.length, truth.length);
+  assert.equal(fromJson(text).chords.at(-1).name, 'Dm');
   assert.throws(() => fromJson('{"format":"x"}'), /yalla-song/);
   assert.throws(() => fromJson('{"format":"yalla-song/1","notes":[{"t":0,"s":9,"f":0,"d":1}]}'), /Ungültige/);
 });
