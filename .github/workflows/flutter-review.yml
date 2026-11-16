@@ -6,6 +6,12 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# A newer push to main replaces a running build, so only the latest
+# release is published and two publish commits never race. A manual
+# run on main (workflow_dispatch) publishes too.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   review:
     runs-on: ubuntu-latest
@@ -27,7 +33,13 @@ jobs:
         with:
           name: design-previews
           path: test/previews
-      - run: bash tool/build_web.sh
+      - name: Build the web app (copied to the repository root on main)
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != pull_request && "$GITHUB_REF" == refs/heads/main ]]; then
+            bash tool/build_web.sh --publish
+          else
+            bash tool/build_web.sh
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: yalla-guitar-web
@@ -45,6 +57,29 @@ jobs:
             git commit -m 'Build and format reviewed Yalla Guitar web preview [skip ci]'
             git push
           fi
+      - name: Publish the web build to GitHub Pages (main)
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Commit on top of the current main. If main got a newer source
+          # commit meanwhile, its own run publishes that one instead.
+          git fetch origin main
+          latest_source="$(git log -1 --format=%H --invert-grep --grep='\[skip ci\]' origin/main)"
+          if [[ "$latest_source" != "$GITHUB_SHA" ]]; then
+            echo "main has a newer commit ($latest_source); its run publishes it."
+            exit 0
+          fi
+          git reset --soft origin/main
+          git reset --quiet
+          git add index.html main.dart.js flutter.js flutter_bootstrap.js flutter_service_worker.js version.json manifest.json favicon.png icons canvaskit assets .nojekyll studio/index.html
+          if git diff --cached --quiet; then
+            echo "The published web build is already up to date."
+            exit 0
+          fi
+          stamp="$(grep -o 'flutter_bootstrap.js?v=[-0-9.]*' index.html | cut -d= -f2)"
+          git commit -m "Publish web build $stamp [skip ci]"
+          git push origin HEAD:main
       - uses: actions/upload-artifact@v4
         if: always()
         with:
