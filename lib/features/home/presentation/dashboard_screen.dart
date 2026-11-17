@@ -313,9 +313,8 @@ class DashboardScreen extends StatelessWidget {
                                 ),
                                 child: const Center(
                                   child: Text(
-                                    'Franz\nFerdinand',
+                                    'أم\nكلثوم',
                                     textAlign: TextAlign.center,
-                                    textDirection: TextDirection.ltr,
                                     style: TextStyle(
                                       color: Color(0xFFFF664D),
                                       fontSize: 22,
