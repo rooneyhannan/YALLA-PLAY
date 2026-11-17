@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
+  appSongIds,
   CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
   findKey, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
   transposeChord, withAttacks,
@@ -221,3 +222,10 @@ test('chords go into the song file and come back', () => {
   assert.throws(() => fromJson(text.replace('"Dm"', '"Hm"')), /Ungültiger Akkord/);
 });
 
+test('the app\'s songs are read from the web build\'s asset manifest', () => {
+  const manifest = readFileSync(new URL('../../assets/AssetManifest.bin.json', import.meta.url), 'utf8');
+  assert.ok(appSongIds(manifest).includes('badak'));
+  // Paths stand in the binary manifest after a length byte.
+  const binary = '\r\x01\x17assets/songs/badak.json\x0c\x01\x16assets/songs/my-2.json\x19assets/design/s1_1.png';
+  assert.deepEqual(appSongIds(JSON.stringify(btoa(binary))), ['badak', 'my-2']);
+});

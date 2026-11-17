@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/song.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../song_library/data/my_songs.dart';
 import '../data/song_chart.dart';
 import 'game_screen.dart';
 
-/// Loads a song's chart, then opens the play screen with it. Songs without
-/// a chart of their own play the demo chart for illustration.
+/// Loads a song's chart, then opens the play screen with it: as changed in
+/// Yalla Studio on this device, if it was. Songs without a chart of their
+/// own play the demo chart for illustration.
 class SongLoader extends StatefulWidget {
   static const demoChart = 'badak';
 
@@ -17,9 +19,15 @@ class SongLoader extends StatefulWidget {
 }
 
 class _SongLoaderState extends State<SongLoader> {
-  late final Future<SongChart> _chart = widget.song.source != null
-      ? Future(() => SongChart.parse(widget.song.source!))
-      : SongChart.load(widget.song.chart ?? SongLoader.demoChart);
+  late final Future<SongChart> _chart = _load();
+
+  Future<SongChart> _load() {
+    final song = widget.song;
+    final chart = song.chart;
+    final source = song.source ?? (chart == null ? null : SongEdits.of(chart));
+    if (source != null) return Future(() => SongChart.parse(source));
+    return SongChart.load(chart ?? SongLoader.demoChart);
+  }
 
   @override
   Widget build(BuildContext context) => FutureBuilder(

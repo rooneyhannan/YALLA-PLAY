@@ -46,4 +46,21 @@ void main() {
       ['mine-ok'],
     );
   });
+
+  test("a song changed in the Studio replaces the app's own chart", () {
+    final edited = {
+      ..._song('badak', title: 'Ba’dak'),
+      'chords': [
+        {'t': 0, 'd': 16, 'name': 'Dm'},
+      ],
+    };
+    final source = jsonEncode({'badak': edited, 'broken': {'id': 'x'}});
+    final chart = SongChart.parse(SongEdits.find(source, 'badak')!);
+    expect(chart.chords.single.chord.name, 'Dm');
+    expect(SongEdits.find(source, 'other'), isNull);
+    expect(SongEdits.find(source, 'broken'), isNull);
+    expect(SongEdits.find(null, 'badak'), isNull);
+    expect(SongEdits.find('[1]', 'badak'), isNull);
+    expect(SongEdits.find('{not json', 'badak'), isNull);
+  });
 }

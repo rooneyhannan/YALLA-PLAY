@@ -72,3 +72,36 @@ class MySongs {
     changes.value++;
   }
 }
+
+/// Changes made in Yalla Studio to the songs the app ships with: kept in
+/// this browser's storage like [MySongs], and played instead of the song's
+/// own chart on this device.
+class SongEdits {
+  /// The storage key: a JSON object from a chart's id to the song as
+  /// changed in the Studio, a `yalla-song/1` song.
+  static const key = 'yalla.songEdits';
+
+  /// The chart [id] as changed in the Studio, or null when it was not.
+  static String? of(String id) => find(store.read(key), id);
+
+  /// The song for [id] in [source], as JSON text; null when there is none
+  /// or it is not a valid song.
+  static String? find(String? source, String id) {
+    if (source == null || source.isEmpty) return null;
+    final Object? edits;
+    try {
+      edits = jsonDecode(source);
+    } on FormatException {
+      return null;
+    }
+    if (edits is! Map<String, dynamic>) return null;
+    final entry = edits[id];
+    if (entry is! Map<String, dynamic>) return null;
+    try {
+      SongChart.fromJson(entry);
+    } on FormatException {
+      return null;
+    }
+    return jsonEncode(entry);
+  }
+}

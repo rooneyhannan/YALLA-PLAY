@@ -17,6 +17,7 @@
     <button id="record" class="button primary" title="Mit dem Mikrofon direkt hier aufnehmen">🎙 Aufnehmen</button>
     <label class="button" title="Eine Guitar-Pro-7/8-Datei (.gp) öffnen und in die Tabulatur der App umwandeln">🎼 Guitar Pro öffnen
       <input type="file" id="open-gp" accept=".gp" hidden></label>
+    <button id="open-app" class="button" title="Einen Song aus der Bibliothek der Yalla-Guitar-App öffnen, z. B. um seine Akkorde zu wählen">📚 Song aus der App</button>
     <label class="button">📄 JSON öffnen
       <input type="file" id="open-json" accept=".json,application/json" hidden></label>
     <button id="to-app" class="button primary" disabled title="Den Song in die Bibliothek der Yalla-Guitar-App legen (auf diesem Gerät, in diesem Browser)">➕ In die App</button>
@@ -58,6 +59,14 @@
       <button value="cancel" class="button">Abbrechen</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="app-dialog" class="track-dialog app-dialog">
+  <p><strong>Song aus der App öffnen</strong></p>
+  <ul id="app-songs" class="app-songs"></ul>
+  <p class="hint">Danach Akkorde wählen (Doppelklick auf die Akkordzeile, einen pro Takt) und oben mit <strong>➕ In der App übernehmen</strong> speichern: die App spielt den Song dann so, auf diesem Gerät, in diesem Browser.</p>
+  <p class="hint">Songs, für die die App noch keine eigenen Noten hat (sie spielen das Demo-Lied), stehen hier nicht. Für alle Geräte gilt eine Änderung erst als JSON in <code>assets/songs/</code>.</p>
+  <form method="dialog" class="actions"><button class="button">Schließen</button></form>
 </dialog>
 
 <section id="drop" class="drop">
