@@ -222,7 +222,6 @@ test('chords go into the song file and come back', () => {
   assert.throws(() => fromJson(text.replace('"Dm"', '"Hm"')), /Ungültiger Akkord/);
 });
 
-
 test('the app\'s songs are read from the web build\'s asset manifest', () => {
   const manifest = readFileSync(new URL('../../assets/AssetManifest.bin.json', import.meta.url), 'utf8');
   assert.ok(appSongIds(manifest).includes('badak'));
