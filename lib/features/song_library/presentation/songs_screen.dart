@@ -299,7 +299,7 @@ class _SongsScreenState extends State<SongsScreen> {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'الأغاني المعلَّمة بهذه الشارة تعزف نغمات توضيحية حتى تتوفر نوتتها.',
+                        'الأغاني المعلَّمة بهذه الشارة غير متوفرة بعد، وستُضاف نوتتها لاحقاً.',
                         style: TextStyle(fontSize: 12, color: AppTheme.cream),
                       ),
                     ),
@@ -372,7 +372,7 @@ class _SongsScreenState extends State<SongsScreen> {
                   ('كاظم الساهر', 's2_0.png'),
                   ('عمرو دياب', 's2_1.png'),
                   ('فيروز', 's2_2.png'),
-                  ('إريك كلابتون', 's2_3.png'),
+                  ('أم كلثوم', 's2_3.png'),
                 ])
                   (
                     pair.$1,
@@ -539,8 +539,8 @@ class _SongsScreenState extends State<SongsScreen> {
     ),
   );
 
-  /// The mark on a song that has no chart of its own yet and plays the
-  /// demo chart instead.
+  /// The mark on a song that has no chart of its own yet and so is not
+  /// available.
   static Widget _demoBadge({Key? key}) => Container(
     key: key,
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -550,7 +550,7 @@ class _SongsScreenState extends State<SongsScreen> {
       borderRadius: BorderRadius.circular(8),
     ),
     child: const Text(
-      'قريباً',
+      'غير متوفرة بعد',
       style: TextStyle(
         color: AppTheme.cream,
         fontSize: 11,
@@ -559,9 +559,9 @@ class _SongsScreenState extends State<SongsScreen> {
     ),
   );
 
-  /// The artist, and for a song without a chart that it plays a demo.
+  /// The artist, and for a song without a chart that it is not available.
   static Widget _subtitle(Song song) => Text(
-    song.hasChart ? song.artist : '${song.artist} • قريباً: نغمات توضيحية',
+    song.hasChart ? song.artist : '${song.artist} • غير متوفرة بعد',
     maxLines: 1,
     overflow: TextOverflow.ellipsis,
   );

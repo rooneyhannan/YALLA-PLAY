@@ -54,10 +54,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('nav-2')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('song-life')));
+    await tester.tap(find.byKey(const ValueKey('song-badak')));
     await chartLoaded(tester);
     expect(find.byType(GameScreen), findsOneWidget);
-    expect(find.text('Life by the Drop'), findsWidgets);
+    expect(find.text('بعدك على بالي'), findsWidgets);
     expect(find.byKey(const ValueKey('guitar-board')), findsOneWidget);
     double progress() => tester
         .widget<LinearProgressIndicator>(
