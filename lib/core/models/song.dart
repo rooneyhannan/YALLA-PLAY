@@ -27,6 +27,13 @@ class Song {
   bool get hasChart => chart != null || source != null;
 }
 
+/// [entries] with the songs that have a chart of their own first, and
+/// otherwise in their order: the others only play the demo chart.
+List<Song> playableFirst(Iterable<Song> entries) => [
+  ...entries.where((s) => s.hasChart),
+  ...entries.where((s) => !s.hasChart),
+];
+
 const songs = <Song>[
   Song(
     id: 'badak',

@@ -46,7 +46,7 @@ class _SongsScreenState extends State<SongsScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ),
-              for (final song in entries)
+              for (final song in playableFirst(entries))
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
@@ -64,11 +64,7 @@ class _SongsScreenState extends State<SongsScreen> {
                       ),
                     ),
                     title: Text(song.title),
-                    subtitle: Text(
-                      song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    subtitle: _subtitle(song),
                     trailing: IconButton(
                       tooltip: 'إضافة أو إزالة من المفضلة',
                       icon: Icon(
@@ -104,13 +100,13 @@ class _SongsScreenState extends State<SongsScreen> {
         var query = '';
         return StatefulBuilder(
           builder: (context, refresh) {
-            final results = [...MySongs.all(), ...songs]
-                .where(
-                  (s) => '${s.title} ${s.artist}'.toLowerCase().contains(
-                    query.toLowerCase(),
-                  ),
-                )
-                .toList();
+            final results = playableFirst(
+              [...MySongs.all(), ...songs].where(
+                (s) => '${s.title} ${s.artist}'.toLowerCase().contains(
+                  query.toLowerCase(),
+                ),
+              ),
+            );
             return SafeArea(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -139,8 +135,9 @@ class _SongsScreenState extends State<SongsScreen> {
                                 children: [
                                   for (final song in results)
                                     ListTile(
+                                      key: ValueKey('search-${song.id}'),
                                       title: Text(song.title),
-                                      subtitle: Text(song.artist),
+                                      subtitle: _subtitle(song),
                                       trailing: const Icon(
                                         Icons.play_circle_outline,
                                         color: AppTheme.gold,
@@ -193,6 +190,9 @@ class _SongsScreenState extends State<SongsScreen> {
     valueListenable: MySongs.changes,
     builder: (context, _, _) => _library(context, MySongs.all()),
   );
+
+  /// The songs in the „most popular“ row, those with a chart first.
+  static final _popular = playableFirst([...songs.sublist(1, 5), songs.first]);
 
   Widget _library(
     BuildContext context,
@@ -290,14 +290,29 @@ class _SongsScreenState extends State<SongsScreen> {
                 'الأكثر شعبية',
                 onAll: () => _collection('كل الأغاني', [...mine, ...songs]),
               ),
+              Padding(
+                key: const ValueKey('demo-note'),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    _demoBadge(),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'الأغاني المعلَّمة بهذه الشارة تعزف نغمات توضيحية حتى تتوفر نوتتها.',
+                        style: TextStyle(fontSize: 12, color: AppTheme.cream),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               SizedBox(
                 height: 250,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: 5,
+                  itemCount: _popular.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 16),
-                  itemBuilder: (context, i) =>
-                      _songCard(songs[i == 4 ? 0 : i + 1]),
+                  itemBuilder: (context, i) => _songCard(_popular[i]),
                 ),
               ),
               const SizedBox(height: 30),
@@ -434,6 +449,12 @@ class _SongsScreenState extends State<SongsScreen> {
                   fit: StackFit.expand,
                   children: [
                     DesignImage(song.image),
+                    if (!song.hasChart)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: _demoBadge(key: ValueKey('demo-${song.id}')),
+                      ),
                     if (song.isPremium)
                       Positioned(
                         top: 0,
@@ -516,6 +537,33 @@ class _SongsScreenState extends State<SongsScreen> {
         ),
       ),
     ),
+  );
+
+  /// The mark on a song that has no chart of its own yet and plays the
+  /// demo chart instead.
+  static Widget _demoBadge({Key? key}) => Container(
+    key: key,
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: Colors.black87,
+      border: Border.all(color: AppTheme.cream),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: const Text(
+      'قريباً',
+      style: TextStyle(
+        color: AppTheme.cream,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+
+  /// The artist, and for a song without a chart that it plays a demo.
+  static Widget _subtitle(Song song) => Text(
+    song.hasChart ? song.artist : '${song.artist} • قريباً: نغمات توضيحية',
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
   );
 
   Widget _tiles(List<(String, String, String, VoidCallback)> entries) =>
