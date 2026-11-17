@@ -1,7 +1,7 @@
 // Yalla Studio: open a recording, let Basic Pitch find its notes, turn them
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
-  CHORD_QUALITIES, ROOT_NAMES, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
+  CHORD_QUALITIES, ROOT_NAMES, appSongIds, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
   hz, midiOf, noteName, onsetEnergy, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord, withAttacks,
 } from './transcribe.js';
 import { gp5 } from './guitarpro.js';
@@ -32,6 +32,8 @@ const state = {
   playhead: 0, // tick
   playing: null,
   edited: false,
+  /** Where the song came from, when from the app: {kind: 'app' | 'mine', id}. */
+  origin: null,
 };
 const undo = [], redo = [];
 let ctx;
@@ -122,20 +124,117 @@ async function openAudio(file, { asked = false } = {}) {
 async function openJson(file) {
   if (state.edited && !confirm('Die aktuellen Änderungen gehen verloren. Weiter?')) return;
   try {
-    const data = fromJson(await file.text());
-    state.meta = {
-      id: data.id ?? slug(data.title ?? 'song'), title: data.title ?? '', artist: data.artist ?? '',
-      bpm: data.bpm ?? 90, ticksPerBeat: data.ticksPerBeat ?? 4, beatsPerBar: data.beatsPerBar ?? 4,
-    };
-    setNotes(data.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger ?? null, fingerAuto: n.finger == null })));
-    state.chords = (data.chords ?? []).map((c) => ({ t: c.t, d: c.d, name: c.name })).sort((a, b) => a.t - b.t);
-    state.detected = null;
-    state.arrange = { mode: 'single', simplify: 0, transpose: 0 };
-    undo.length = redo.length = 0;
-    state.edited = false;
-    openEditor(`${state.notes.length} Noten${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} geladen`);
+    loadSong(fromJson(await file.text()));
   } catch (error) {
     alert('Die Datei ist keine gültige Song-Datei:\n' + error.message);
+  }
+}
+
+/** Puts a `yalla-song/1` song into the editor; [origin] says where in the app it came from. */
+function loadSong(data, origin = null) {
+  state.meta = {
+    id: data.id ?? slug(data.title ?? 'song'), title: data.title ?? '', artist: data.artist ?? '',
+    bpm: data.bpm ?? 90, ticksPerBeat: data.ticksPerBeat ?? 4, beatsPerBar: data.beatsPerBar ?? 4,
+  };
+  setNotes(data.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger ?? null, fingerAuto: n.finger == null })));
+  state.chords = (data.chords ?? []).map((c) => ({ t: c.t, d: c.d, name: c.name })).sort((a, b) => a.t - b.t);
+  state.detected = null;
+  state.arrange = { mode: 'single', simplify: 0, transpose: 0 };
+  undo.length = redo.length = 0;
+  state.edited = false;
+  openEditor(`${state.notes.length} Noten${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} geladen`, origin);
+}
+
+// ---------------------------------------------------------------- the app's songs
+
+// The app is served from the same site: its songs lie in its web build, and
+// this browser's storage holds the songs added from here and the changes
+// made here to the app's own songs.
+const MY_SONGS = 'yalla.mySongs';
+/** A JSON object from the id of a song the app ships with to that song as
+ * changed here; the app plays it instead of its own, on this device. */
+const SONG_EDITS = 'yalla.songEdits';
+
+function readStored(key, empty) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return value && typeof value === 'object' && Array.isArray(value) === Array.isArray(empty) ? value : empty;
+  } catch { return empty; }
+}
+
+$('open-app').addEventListener('click', () => listAppSongs());
+
+/** Shows the app's songs to choose one: its own (as changed here, if they
+ * were) and the ones added from here. */
+async function listAppSongs() {
+  const dialog = $('app-dialog'), list = $('app-songs');
+  list.replaceChildren(Object.assign(document.createElement('li'), { textContent: 'Lade die Songs der App …' }));
+  if (!dialog.open) dialog.showModal();
+  let shipped = [];
+  try {
+    const response = await fetch('../assets/AssetManifest.bin.json', { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const ids = appSongIds(await response.text());
+    shipped = await Promise.all(ids.map(async (id) => {
+      try {
+        const res = await fetch(`../assets/assets/songs/${id}.json`, { cache: 'no-cache' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return { id, song: fromJson(await res.text()) };
+      } catch (error) {
+        return { id, error };
+      }
+    }));
+  } catch (error) {
+    shipped = [{ id: '', error }];
+  }
+  const edits = readStored(SONG_EDITS, {});
+  const mine = readStored(MY_SONGS, []).filter((s) => s && typeof s === 'object');
+  const rows = [];
+  for (const { id, song, error } of shipped) {
+    if (error) {
+      rows.push(row(id ? `${id}: konnte nicht geladen werden (${error.message ?? error})`
+        : `Die Songs der App konnten nicht geladen werden (${error.message ?? error}). Das geht nur auf der Seite im Netz, nicht mit einer lokal geöffneten Datei.`));
+      continue;
+    }
+    const edited = edits[id];
+    const name = `${song.title || id}${song.artist ? ` · ${song.artist}` : ''}`;
+    rows.push(row(name, edited ? 'in diesem Browser geändert' : 'App-Song', [
+      ['Öffnen', () => openFromApp(edited ?? song, { kind: 'app', id })],
+      ...(edited ? [['↺ Original', () => {
+        if (!confirm(`Deine Änderungen an „${song.title || id}“ verwerfen? Die App spielt dann wieder das Original.`)) return;
+        const all = readStored(SONG_EDITS, {});
+        delete all[id];
+        localStorage.setItem(SONG_EDITS, JSON.stringify(all));
+        listAppSongs();
+      }]] : []),
+    ]));
+  }
+  for (const song of mine) {
+    rows.push(row(`${song.title || song.id}${song.artist ? ` · ${song.artist}` : ''}`, 'aus dem Studio',
+      [['Öffnen', () => openFromApp(song, { kind: 'mine', id: song.id })]]));
+  }
+  list.replaceChildren(...rows);
+}
+
+function row(name, badge = '', buttons = []) {
+  const li = document.createElement('li');
+  li.append(Object.assign(document.createElement('span'), { className: 'app-song-name', textContent: name }));
+  if (badge) li.append(Object.assign(document.createElement('span'), { className: 'badge', textContent: badge }));
+  for (const [label, action] of buttons) {
+    const button = Object.assign(document.createElement('button'), { type: 'button', className: 'button small', textContent: label });
+    button.addEventListener('click', action);
+    li.append(button);
+  }
+  return li;
+}
+
+function openFromApp(song, origin) {
+  if (state.edited && !confirm('Die aktuellen Änderungen gehen verloren. Weiter?')) return;
+  try {
+    loadSong(fromJson(JSON.stringify(song)), origin);
+    $('app-dialog').close();
+  } catch (error) {
+    alert('Der Song lässt sich nicht öffnen:\n' + error.message);
   }
 }
 
@@ -450,10 +549,8 @@ $('save-json').addEventListener('click', () => {
   download(new Blob([exportJson()], { type: 'application/json' }), `${state.meta.id || 'song'}.json`);
   state.edited = false;
 });
-// The tab as it stands, for Guitar Pro; the song file stays the one to keep.
-// The app is served from the same site and reads its own songs from this
-// browser's storage: a song put there shows in its library at once.
-const MY_SONGS = 'yalla.mySongs';
+// The app reads its songs from this browser's storage too: a song put there
+// shows in its library at once.
 $('to-app').addEventListener('click', () => {
   readMeta();
   if (!state.meta.title.trim()) {
@@ -462,13 +559,29 @@ $('to-app').addEventListener('click', () => {
   }
   if (!state.notes.length) return alert('Der Song hat noch keine Noten.');
   const song = JSON.parse(exportJson());
+  // One of the app's own songs, changed here: the app plays it so from now on.
+  if (state.origin?.kind === 'app' && song.id === state.origin.id) {
+    const edits = readStored(SONG_EDITS, {});
+    edits[song.id] = song;
+    try {
+      localStorage.setItem(SONG_EDITS, JSON.stringify(edits));
+    } catch (error) {
+      return alert('Konnte die Änderungen nicht speichern: ' + (error.message ?? error));
+    }
+    state.edited = false;
+    setStatus(`„${song.title}“ ist in der App aktualisiert (in diesem Browser)`);
+    if (confirm(`Die App spielt „${song.title}“ jetzt so, mit deinen Akkorden: auf diesem Gerät, in diesem Browser.\n\nDie App jetzt öffnen?`)) {
+      window.open('../', 'yalla-app');
+    }
+    return;
+  }
   let list = [];
   try {
     list = JSON.parse(localStorage.getItem(MY_SONGS) ?? '[]');
     if (!Array.isArray(list)) list = [];
   } catch { list = []; }
   const at = list.findIndex((s) => s?.id === song.id);
-  if (at >= 0 && !confirm(`In der App gibt es schon einen Song mit der Datei-ID „${song.id}“ („${list[at].title}“). Ersetzen?`)) return;
+  if (at >= 0 && !(state.origin?.kind === 'mine' && state.origin.id === song.id) && !confirm(`In der App gibt es schon einen Song mit der Datei-ID „${song.id}“ („${list[at].title}“). Ersetzen?`)) return;
   if (at >= 0) list[at] = song;
   else list.push(song);
   try {
@@ -560,7 +673,9 @@ addEventListener('unhandledrejection', (e) => {
   }
 });
 
-function openEditor(status) {
+function openEditor(status, origin = null) {
+  state.origin = origin;
+  $('to-app').textContent = origin?.kind === 'app' ? '➕ In der App übernehmen' : '➕ In die App';
   hideProgress();
   $('drop').hidden = true;
   $('editor').hidden = false;

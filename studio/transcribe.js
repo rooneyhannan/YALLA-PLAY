@@ -677,6 +677,17 @@ export function fromJson(text) {
   return data;
 }
 
+/** The ids of the songs the app ships with (`assets/songs/<id>.json`), read
+ * from the web build's asset manifest `AssetManifest.bin.json`: a JSON
+ * string holding the binary manifest in base64, in which each asset's path
+ * stands as plain text. */
+export function appSongIds(manifestJson) {
+  const text = atob(JSON.parse(manifestJson));
+  const ids = new Set();
+  for (const m of text.matchAll(/assets\/songs\/([A-Za-z0-9_-]+)\.json/g)) ids.add(m[1]);
+  return [...ids].sort();
+}
+
 /** A file name from a title: lower case letters, digits and dashes. */
 export function slug(title) {
   const s = title.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()

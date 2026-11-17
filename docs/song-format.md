@@ -55,5 +55,9 @@ Each chord:
 The backing never plays the pitch the player is asked for at that moment, in
 any octave, so the microphone hears only the guitar for it.
 
+Yalla Studio can open the app's songs (**📚 Song aus der App**) and keep a
+changed one in the browser's storage (`yalla.songEdits`); the app on that
+device then plays it instead of the file here.
+
 To add a song: put its JSON file into `assets/songs/` and set `chart: '<id>'`
 on its entry in `lib/core/models/song.dart`.

@@ -46,6 +46,14 @@ grace notes, muted notes and drums are left out, repeats are read as written. St
 capo keeps the file's strings and frets; another tuning or a capo is laid out anew for standard tuning.
 The grid is sixteenths, or finer where triplets need it. Older formats (`.gpx`, `.gp3`–`.gp5`) are not read.
 
+**📚 Song aus der App** lists the app's songs: the ones it ships with (found through the web build's
+`assets/AssetManifest.bin.json`, loaded from `assets/assets/songs/`) and the ones added from here. Open one,
+choose its chords (one per bar: double-click the chord lane), and **➕ In der App übernehmen** keeps the song
+so in this browser's storage (key `yalla.songEdits`, a JSON object from the song's id to the changed song):
+the app then plays it with these chords on this device. **↺ Original** in the list drops the change. A song
+the app has no notes for yet (it plays the demo tune) is not listed. To change a song for everyone, save
+it as JSON and put it into `assets/songs/`.
+
 **JSON öffnen** loads a song file again for editing.
 
 **Guitar Pro** saves the tab as it stands as a Guitar Pro 5 file (`.gp5`), which Guitar Pro 5–8,
