@@ -28,7 +28,17 @@ class _MainScreenState extends State<MainScreen> {
     Icons.tune_rounded,
   ];
 
+  /// Plays [song], or for a song without a chart of its own says that it
+  /// is not available yet: no demo stands in for it.
   void _openSong(Song song) {
+    if (!song.hasChart) {
+      showPreviewInfo(
+        context,
+        title: 'الأغنية غير متوفرة بعد',
+        message: 'نوتة «${song.title}» قيد التحضير وستتوفر قريباً.',
+      );
+      return;
+    }
     setState(() => _recent = song);
     Navigator.of(
       context,
