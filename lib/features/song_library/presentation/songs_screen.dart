@@ -299,7 +299,7 @@ class _SongsScreenState extends State<SongsScreen> {
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
-                        'نوتة هذه الأغاني ستتوفر لاحقاً؛ حتى ذلك الحين تعزف نغمات توضيحية.',
+                        'الأغاني المعلَّمة بهذه الشارة تعزف نغمات توضيحية حتى تتوفر نوتتها.',
                         style: TextStyle(fontSize: 12, color: AppTheme.cream),
                       ),
                     ),
@@ -550,7 +550,7 @@ class _SongsScreenState extends State<SongsScreen> {
       borderRadius: BorderRadius.circular(8),
     ),
     child: const Text(
-      'تجريبي',
+      'قريباً',
       style: TextStyle(
         color: AppTheme.cream,
         fontSize: 11,
@@ -561,7 +561,7 @@ class _SongsScreenState extends State<SongsScreen> {
 
   /// The artist, and for a song without a chart that it plays a demo.
   static Widget _subtitle(Song song) => Text(
-    song.hasChart ? song.artist : '${song.artist} • تجريبي: نغمات توضيحية',
+    song.hasChart ? song.artist : '${song.artist} • قريباً: نغمات توضيحية',
     maxLines: 1,
     overflow: TextOverflow.ellipsis,
   );
