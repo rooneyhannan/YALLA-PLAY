@@ -178,6 +178,14 @@ class _GameScreenState extends State<GameScreen>
     }
     await sound;
     if (!mounted) return;
+    // The strings take longest to build: built now, before the countdown,
+    // they cannot hold up the first bars.
+    for (final f in {
+      for (final e in _scheduler.events)
+        if (e.voice == Voice.strings) e.frequency,
+    }) {
+      _sound.prepare(Voice.strings, f);
+    }
     setState(() {
       _started = true;
       _countdown = _countdownSeconds;
@@ -205,7 +213,7 @@ class _GameScreenState extends State<GameScreen>
   /// hears it.
   bool _audible(SoundEvent e) => switch (e.voice) {
     Voice.click || Voice.accent => _metronome,
-    Voice.chord || Voice.bass => _backing,
+    Voice.chord || Voice.bass || Voice.strings || Voice.harmony => _backing,
     Voice.guitar => _backing && !_listening,
   };
 

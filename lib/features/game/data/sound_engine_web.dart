@@ -1,4 +1,5 @@
 import 'dart:js_interop';
+import 'dart:math' as math;
 
 import 'package:web/web.dart' as web;
 
@@ -36,6 +37,22 @@ class WebSoundEngine implements SoundEngine {
   @override
   double? get time => _ctx?.currentTime;
 
+  web.AudioBuffer _buffer(
+    web.AudioContext ctx,
+    Voice voice,
+    double frequency,
+  ) => _buffers.putIfAbsent('${voice.name}:${frequency.toStringAsFixed(1)}', () {
+    final samples = synthesize(voice, frequency, ctx.sampleRate.round());
+    return ctx.createBuffer(1, samples.length, ctx.sampleRate)
+      ..copyToChannel(samples.toJS, 0);
+  });
+
+  @override
+  void prepare(Voice voice, double frequency) {
+    final ctx = _ctx;
+    if (ctx != null) _buffer(ctx, voice, frequency);
+  }
+
   @override
   void play(
     Voice voice,
@@ -46,24 +63,18 @@ class WebSoundEngine implements SoundEngine {
   }) {
     final ctx = _ctx, out = _out;
     if (ctx == null || out == null) return;
-    final buffer = _buffers.putIfAbsent(
-      '${voice.name}:${frequency.toStringAsFixed(1)}',
-      () {
-        final samples = synthesize(voice, frequency, ctx.sampleRate.round());
-        return ctx.createBuffer(1, samples.length, ctx.sampleRate)
-          ..copyToChannel(samples.toJS, 0);
-      },
-    );
+    final buffer = _buffer(ctx, voice, frequency);
+    final release = releaseSeconds(voice);
     final level = ctx.createGain();
     level.gain
       ..setValueAtTime(gain, at)
-      // Released like a lifted finger rather than cut.
-      ..setTargetAtTime(0, at + length, .03);
+      // Released like a lifted finger or bow rather than cut.
+      ..setTargetAtTime(0, at + length, release);
     final source = ctx.createBufferSource()..buffer = buffer;
     source
       ..connect(level)
       ..start(at)
-      ..stop(at + length + .25);
+      ..stop(at + length + math.max(.25, 8 * release));
     level.connect(out);
     _sources.add(source);
     source.onended = ((web.Event _) {
