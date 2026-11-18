@@ -61,6 +61,7 @@ const songs = <Song>[
     image: 's2_2.png',
     difficulty: 'متوسط',
     isPremium: true,
+    chart: 'lamma-bada',
   ),
   Song(
     id: 'ahwak',
