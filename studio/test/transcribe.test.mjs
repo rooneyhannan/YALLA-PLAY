@@ -170,6 +170,27 @@ test('fingers: one finger per fret, shifting only when needed', () => {
   assert.deepEqual(assignFingers([5, 6, 7, 8, 6, 5]), [1, 2, 3, 4, 2, 1]);
 });
 
+test('fingers: the hand shifts with the melody, never pinky 5 to index 6', () => {
+  assert.deepEqual(assignFingers([3, 5, 6, 8, 6, 6, 5, 5, 3, 3, 2, 3]), [1, 3, 4, 4, 2, 2, 1, 1, 2, 2, 1, 2]);
+  for (const id of ['badak', 'lamma-bada']) {
+    const frets = read(`../../assets/songs/${id}.json`).notes.map((n) => n.f);
+    const fingers = assignFingers(frets);
+    let last = -1;
+    frets.forEach((f, i) => {
+      if (!f) return;
+      if (last >= 0) {
+        const hand = (f - fingers[i]) - (frets[last] - fingers[last]), step = f - frets[last];
+        const where = `${id} note ${i}: ${frets[last]}/${fingers[last]} → ${f}/${fingers[i]}`;
+        if (hand) {
+          assert.equal(Math.sign(step), Math.sign(hand), where);
+          assert.ok(Math.abs(step - hand) <= 1, where);
+        }
+      }
+      last = i;
+    });
+  }
+});
+
 test('the JSON file is what the app reads, and reads back', () => {
   const file = readFileSync(new URL('../../assets/songs/badak.json', import.meta.url), 'utf8');
   const text = toJson({ id: 'badak', title: 'Ba’dak Ala Bali', artist: 'فيروز', bpm: 90 },
