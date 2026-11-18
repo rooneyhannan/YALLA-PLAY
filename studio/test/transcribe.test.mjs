@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import {
   appSongIds,
   CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
-  findKey, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
+  findKey, findMaqam, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
   transposeChord, withAttacks,
 } from '../transcribe.js';
 
@@ -204,7 +204,7 @@ test('chords: names, parts and the same table as the app', () => {
   assert.deepEqual(fromDart, Object.fromEntries(Object.entries(CHORD_QUALITIES)));
 });
 
-test('chords are suggested from the melody, as the app would choose them', () => {
+test('chords are suggested from the melody\'s maqam', () => {
   // Ba’dak ends on D: heard in D minor, one chord per bar at most.
   assert.deepEqual(findKey(truth), { tonic: 2, minor: true });
   const chords = suggestChords(truth);
@@ -214,12 +214,45 @@ test('chords are suggested from the melody, as the app would choose them', () =>
   for (let i = 1; i < chords.length; i++) assert.equal(chords[i].t, chords[i - 1].t + chords[i - 1].d);
 });
 
+test('the maqam is found from the melody and its final note', () => {
+  assert.deepEqual(findMaqam(truth), { tonic: 2, maqam: 'nahawand', name: 'D Nahawand' });
+  // A melody from MIDI pitches on the G string, a beat each, the last one long.
+  const melody = (pitches) => pitches.map((p, i) => ({ t: 4 * i, s: 3, f: p - 55, d: i === pitches.length - 1 ? 8 : 4 }));
+  const D = 62;
+  const cases = [
+    // Hijaz on D: E flat and F sharp.
+    [[D, D + 1, D + 4, D + 5, D + 7, D + 5, D + 4, D + 1, D + 4, D + 1, D], 'D Hijaz'],
+    // Kurd on D: E flat and F.
+    [[D, D + 1, D + 3, D + 5, D + 7, D + 5, D + 3, D + 1, D + 3, D + 1, D], 'D Kurd'],
+    // The same notes as Bb Ajam and G Nahawand; the melody rests on D.
+    [[D, D + 3, D + 1, D, D + 5, D + 3, D + 1, D], 'D Kurd'],
+    // C Ajam, ending on C.
+    [[60, 62, 64, 65, 67, 69, 71, 72, 67, 64, 62, 60], 'C Ajam'],
+    // A Nahawand with its raised seventh going up to A.
+    [[57, 59, 60, 62, 64, 65, 68, 69, 64, 60, 59, 57], 'A Nahawand'],
+  ];
+  for (const [pitches, name] of cases) assert.equal(findMaqam(melody(pitches)).name, name, name);
+  // A short stray note heard at the end does not move the tonic.
+  const ajam = melody([60, 62, 64, 65, 67, 69, 71, 72, 67, 64, 62, 60]);
+  ajam.push({ t: ajam.at(-1).t + 8, s: 3, f: 64 - 55, d: 2 });
+  assert.equal(findMaqam(ajam).name, 'C Ajam');
+  // Hijaz gets its own chords: D major on the tonic, E flat above it.
+  const hijaz = melody([D, D + 1, D + 4, D + 5, D + 7, D + 8, D + 10, D + 7, D + 5, D + 4, D + 1, D + 1, D + 3, D + 1, D + 4, D]);
+  const names = new Set(suggestChords(hijaz).map((c) => c.name));
+  assert.ok(names.has('D') && !names.has('Dm'), [...names].join(' '));
+  for (const n of names) assert.ok(['D', 'Eb', 'Gm', 'Cm'].includes(n), n);
+});
+
 test('chords go into the song file and come back', () => {
   const chords = [{ t: 0, d: 16, name: 'Dm' }, { t: 16, d: 8, name: 'C/E' }];
   const text = toJson({ id: 'x', title: 'X', bpm: 90 }, truth.slice(0, 2), chords);
   assert.match(text, /"chords": \[\n    \{"t": 0, "d": 16, "name": "Dm"\}/);
   assert.deepEqual(fromJson(text).chords, chords);
   assert.throws(() => fromJson(text.replace('"Dm"', '"Hm"')), /Ungültiger Akkord/);
+  // The maqam goes along when known.
+  const withMaqam = toJson({ id: 'x', title: 'X', bpm: 90, maqam: 'D Nahawand' }, truth.slice(0, 2));
+  assert.equal(fromJson(withMaqam).maqam, 'D Nahawand');
+  assert.ok(!('maqam' in fromJson(text)));
 });
 
 test('the app\'s songs are read from the web build\'s asset manifest', () => {

@@ -1,7 +1,7 @@
 // Yalla Studio: open a recording, let Basic Pitch find its notes, turn them
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
-  CHORD_QUALITIES, ROOT_NAMES, appSongIds, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
+  CHORD_QUALITIES, ROOT_NAMES, appSongIds, assignFingers, chartNotes, chordName, chordTones, detectTempo, findMaqam, fromJson,
   hz, midiOf, noteName, onsetEnergy, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord, withAttacks,
 } from './transcribe.js';
 import { gp5 } from './guitarpro.js';
@@ -105,9 +105,10 @@ async function openAudio(file, { asked = false } = {}) {
     state.offset = tempo.offset;
     setNotes(chartNotes(detected, { ...tempo, ticksPerBeat: 4, ...state.arrange }).map((n) => ({ ...n, fingerAuto: true })));
     state.chords = [];
+    const maqam = autoChords();
     undo.length = redo.length = 0;
     state.edited = false;
-    openEditor(`${state.notes.length} Noten erkannt · Tempo ${tempo.bpm} BPM`);
+    openEditor(`${state.notes.length} Noten erkannt · Tempo ${tempo.bpm} BPM` + maqam);
   } catch (error) {
     if (error.cancelled) return hideProgress();
     console.error(error);
@@ -138,11 +139,13 @@ function loadSong(data, origin = null) {
   };
   setNotes(data.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger ?? null, fingerAuto: n.finger == null })));
   state.chords = (data.chords ?? []).map((c) => ({ t: c.t, d: c.d, name: c.name })).sort((a, b) => a.t - b.t);
+  const given = state.chords.length;
+  const maqam = autoChords();
   state.detected = null;
   state.arrange = { mode: 'single', simplify: 0, transpose: 0 };
   undo.length = redo.length = 0;
   state.edited = false;
-  openEditor(`${state.notes.length} Noten${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} geladen`, origin);
+  openEditor(`${state.notes.length} Noten${given ? `, ${given} Akkorde` : ''} geladen` + maqam, origin);
 }
 
 // ---------------------------------------------------------------- the app's songs
@@ -473,6 +476,8 @@ async function openGp(file) {
   state.meta = song.meta;
   setNotes(song.notes.map((n) => ({ ...n, fingerAuto: n.finger == null })));
   state.chords = song.chords;
+  const given = state.chords.length;
+  const maqam = autoChords();
   state.detected = null;
   state.audio = null;
   state.offset = 0;
@@ -481,8 +486,8 @@ async function openGp(file) {
   undo.length = redo.length = 0;
   state.edited = false;
   const name = score.tracks[index].name;
-  openEditor(`${state.notes.length} Noten aus „${name}“${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} · ${song.meta.bpm} BPM` +
-    (song.retuned ? ' · auf Standardstimmung umgelegt' : ''));
+  openEditor(`${state.notes.length} Noten aus „${name}“${given ? `, ${given} Akkorde` : ''} · ${song.meta.bpm} BPM` +
+    (song.retuned ? ' · auf Standardstimmung umgelegt' : '') + maqam);
 }
 
 /** Asks which track to take; resolves with its index, or null. */
@@ -611,7 +616,7 @@ const exportGp5 = () => gp5(state.meta, state.notes, state.chords);
 
 function exportJson() {
   return toJson(
-    state.meta,
+    { ...state.meta, maqam: state.notes.length ? findMaqam(state.notes, state.meta).name : undefined },
     state.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger })),
     state.chords,
   );
@@ -683,6 +688,7 @@ function openEditor(status, origin = null) {
   $('save-gp5').disabled = false;
   $('to-app').disabled = false;
   writeMeta();
+  showMaqam();
   state.selected = -1;
   state.selectedChord = -1;
   state.scroll = 0;
@@ -766,7 +772,8 @@ function rearrange() {
     state.notes = chartNotes(state.detected, { bpm: state.meta.bpm, offset: state.offset, ticksPerBeat: state.meta.ticksPerBeat, ...next })
       .map((n) => ({ ...n, fingerAuto: true }));
     const shift = next.transpose - before.transpose;
-    if (shift) state.chords = state.chords.map((c) => ({ ...c, name: transposeChord(c.name, shift) }));
+    // Chords the Studio chose are chosen anew for the new notes.
+    if (shift && !state.chordsAuto) state.chords = state.chords.map((c) => ({ ...c, name: transposeChord(c.name, shift) }));
     state.selected = -1;
   });
   writeArrange();
@@ -784,6 +791,29 @@ for (const [id, step] of [['shift-left', -1], ['shift-right', 1]]) {
 
 // ---------------------------------------------------------------- editing
 
+/** A song without chords gets them from its maqam, as soon as it is opened:
+ * returns a note for the status line, empty when the song had chords. */
+function autoChords() {
+  state.chordsAuto = false;
+  if (state.chords.length || !state.notes.length) return '';
+  state.chords = suggestChords(state.notes, state.meta);
+  state.chordsAuto = true;
+  return ` · Maqam ${findMaqam(state.notes, state.meta).name}, ${state.chords.length} Akkorde vorgeschlagen`;
+}
+
+/** Chords the Studio chose follow the notes, after recomputing, shifting or
+ * editing them, until a chord is changed by hand. */
+function followNotes(chordsBefore) {
+  if (!state.chordsAuto) return;
+  if (JSON.stringify(state.chords) !== chordsBefore) state.chordsAuto = false;
+  else state.chords = suggestChords(state.notes, state.meta);
+}
+
+/** The maqam the melody is heard in, next to the chord buttons. */
+function showMaqam() {
+  $('maqam').textContent = state.notes.length ? `Maqam: ${findMaqam(state.notes, state.meta).name}` : '';
+}
+
 function setNotes(notes) {
   state.notes = notes.sort((a, b) => a.t - b.t || a.s - b.s);
   refinger();
@@ -797,7 +827,7 @@ function refinger() {
 
 /** Applies an edit so that it can be undone. */
 const snapshot = () => JSON.stringify({
-  notes: state.notes, chords: state.chords, selected: state.selected, selectedChord: state.selectedChord,
+  notes: state.notes, chords: state.chords, chordsAuto: state.chordsAuto, selected: state.selected, selectedChord: state.selectedChord,
   arrange: state.arrange, bpm: state.meta.bpm, offset: state.offset,
 });
 
@@ -807,12 +837,15 @@ function change(edit) {
   redo.length = 0;
   const selectedNote = state.notes[state.selected];
   const chord = state.chords[state.selectedChord];
+  const chordsBefore = JSON.stringify(state.chords);
   edit();
   setNotes(state.notes);
+  followNotes(chordsBefore);
   state.chords.sort((a, b) => a.t - b.t);
   if (selectedNote) state.selected = state.notes.indexOf(selectedNote);
   if (chord) state.selectedChord = state.chords.indexOf(chord);
   state.edited = true;
+  showMaqam();
   inspect();
   draw();
 }
@@ -822,6 +855,7 @@ function restore(from, to) {
   const saved = JSON.parse(from.pop());
   state.notes = saved.notes;
   state.chords = saved.chords ?? [];
+  state.chordsAuto = saved.chordsAuto ?? false;
   state.selected = Math.min(saved.selected, state.notes.length - 1);
   state.selectedChord = Math.min(saved.selectedChord ?? -1, state.chords.length - 1);
   state.arrange = saved.arrange;
@@ -829,6 +863,7 @@ function restore(from, to) {
   state.offset = saved.offset;
   writeArrange();
   state.edited = true;
+  showMaqam();
   inspect();
   draw();
 }
@@ -965,10 +1000,11 @@ $('suggest-chords').addEventListener('click', () => {
   if (!state.notes.length) return;
   if (state.chords.length && !confirm('Die vorhandenen Akkorde werden durch Vorschläge ersetzt. Weiter?')) return;
   change(() => { state.chords = suggestChords(state.notes, state.meta); });
+  state.chordsAuto = true;
   state.selectedChord = -1;
   inspect();
   draw();
-  setStatus(`${state.chords.length} Akkorde vorgeschlagen, bitte anhören und anpassen`);
+  setStatus(`${state.chords.length} Akkorde nach Maqam ${findMaqam(state.notes, state.meta).name} vorgeschlagen, bitte anhören und anpassen`);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -1317,14 +1353,17 @@ canvas.addEventListener('pointerup', () => {
   if (drag?.moved && drag.chord) {
     state.chords.sort((a, b) => a.t - b.t);
     state.selectedChord = state.chords.indexOf(drag.note);
+    state.chordsAuto = false;
     state.edited = true;
     inspect();
     draw();
   } else if (drag?.moved) {
     const note = drag.note;
     setNotes(state.notes);
+    followNotes(JSON.stringify(state.chords));
     state.selected = state.notes.indexOf(note);
     state.edited = true;
+    showMaqam();
     inspect();
     draw();
   }

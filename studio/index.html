@@ -64,7 +64,7 @@
 <dialog id="app-dialog" class="track-dialog app-dialog">
   <p><strong>Song aus der App öffnen</strong></p>
   <ul id="app-songs" class="app-songs"></ul>
-  <p class="hint">Danach Akkorde wählen (Doppelklick auf die Akkordzeile, einen pro Takt) und oben mit <strong>➕ In der App übernehmen</strong> speichern: die App spielt den Song dann so, auf diesem Gerät, in diesem Browser.</p>
+  <p class="hint">Hat ein Song noch keine Akkorde, schlägt das Studio sie beim Öffnen nach seinem Maqam vor. Danach Akkorde anpassen (Doppelklick auf die Akkordzeile, einen pro Takt) und oben mit <strong>➕ In der App übernehmen</strong> speichern: die App spielt den Song dann so, auf diesem Gerät, in diesem Browser.</p>
   <p class="hint">Songs, für die die App noch keine eigenen Noten hat (sie spielen das Demo-Lied), stehen hier nicht. Für alle Geräte gilt eine Änderung erst als JSON in <code>assets/songs/</code>.</p>
   <form method="dialog" class="actions"><button class="button">Schließen</button></form>
 </dialog>
@@ -109,7 +109,8 @@
       <button id="requantize" class="button small" title="Die erkannten Noten mit dem eingetragenen Tempo neu ins Raster setzen">Raster neu berechnen</button>
       <button id="shift-left" class="button small" title="Alle Noten einen Schritt früher">⟵ 1</button>
       <button id="shift-right" class="button small" title="Alle Noten einen Schritt später (z. B. für einen Auftakt)">1 ⟶</button>
-      <button id="suggest-chords" class="button small" title="Akkorde für die Begleitung aus der Melodie vorschlagen">Akkorde vorschlagen</button>
+      <button id="suggest-chords" class="button small" title="Akkorde für die Begleitung aus dem Maqam der Melodie vorschlagen">Akkorde vorschlagen</button>
+      <span id="maqam" class="hint" title="Aus der Melodie erkannt: Ajam, Nahawand, Kurd oder Hijaz. Maqamat mit Vierteltönen (Rast, Bayati, Saba) klingen auf Bünden wie ihr nächster Verwandter (Rast wie Ajam, Bayati wie Kurd oder Nahawand)."></span>
     </div>
   </section>
 

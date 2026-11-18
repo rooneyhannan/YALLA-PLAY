@@ -592,27 +592,82 @@ export function findKey(notes) {
 }
 
 /**
- * Suggests chords for a melody, as the app does when a song has none: the
- * key by the Krumhansl profiles, then per bar the triad of the key
- * that holds most of the melody, staying on the chord before when that
- * fits as well. Same chords in a row become one. Returns [{t, d, name}].
+ * The maqamat a fretted guitar can play: their scales in semitones from the
+ * tonic. Maqamat with quarter tones (Rast, Bayati, Saba, Sikah) cannot sound
+ * on frets; a guitar plays them bent or as their nearest relative here
+ * (Bayati as Kurd or Nahawand, Rast as Ajam), and so they are found as that.
+ * Nahawand may raise its seventh going up to the tonic, as in harmonic minor.
+ */
+export const MAQAMS = {
+  ajam: { name: 'Ajam', scale: [0, 2, 4, 5, 7, 9, 11], minor: false },
+  nahawand: { name: 'Nahawand', scale: [0, 2, 3, 5, 7, 8, 10], also: [11], minor: true },
+  kurd: { name: 'Kurd', scale: [0, 1, 3, 5, 7, 8, 10], minor: true },
+  hijaz: { name: 'Hijaz', scale: [0, 1, 4, 5, 7, 8, 10], minor: false },
+};
+
+/**
+ * The maqam of chart notes ({t, s, f, d}): {tonic, maqam, name}, tonic as
+ * pitch class 0 = C … 11 = B, maqam a key of [MAQAMS], name as in `D Nahawand`.
+ * The scale that holds the melody wins, notes outside it count against it;
+ * of scales with the same notes (C Ajam, A Nahawand, E Kurd) the one whose
+ * tonic the melody stays on and comes to rest on: an Arabic melody ends on
+ * its tonic (qarar).
+ */
+export function findMaqam(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {}) {
+  const weight = new Array(12).fill(0);
+  for (const n of notes) weight[midiOf(n.s, n.f) % 12] += n.d;
+  const total = weight.reduce((a, b) => a + b, 0);
+  // The note the melody comes to rest on: the longest of its last bar, the
+  // later one of equal length, so that a short stray note
+  // heard at the end does not decide.
+  let final = null;
+  if (notes.length && notes.every((n) => n.t != null)) {
+    const end = Math.max(...notes.map((n) => n.t + n.d));
+    const rest = notes.filter((n) => n.t + n.d > end - ticksPerBeat * beatsPerBar)
+      .reduce((a, b) => (b.d > a.d || (b.d === a.d && b.t > a.t) ? b : a));
+    final = midiOf(rest.s, rest.f) % 12;
+  }
+  let best = { tonic: 0, maqam: 'ajam' }, bestScore = -Infinity;
+  for (const [maqam, m] of Object.entries(MAQAMS)) {
+    for (let tonic = 0; tonic < 12; tonic++) {
+      let s = 0;
+      for (let p = 0; p < 12; p++) {
+        const step = (p - tonic + 12) % 12;
+        if (m.scale.includes(step)) s += weight[p];
+        else if (!m.also?.includes(step)) s -= 2 * weight[p];
+      }
+      s += 0.5 * weight[tonic] + 0.25 * weight[(tonic + 7) % 12];
+      if (tonic === final) s += 0.2 * total;
+      if (s > bestScore) { bestScore = s; best = { tonic, maqam }; }
+    }
+  }
+  return { ...best, name: ROOT_NAMES[best.tonic] + ' ' + MAQAMS[best.maqam].name };
+}
+
+/**
+ * Suggests chords for a melody: its maqam by [findMaqam], then per bar the
+ * triad of the maqam's scale that holds most of the melody, staying on the
+ * chord before when that fits as well. Triads without a perfect fifth are
+ * left out; Nahawand also gets its major dominant (A in D Nahawand). Same
+ * chords in a row become one. Returns [{t, d, name}].
  */
 export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {}) {
   if (!notes.length) return [];
   const pc = (n) => midiOf(n.s, n.f) % 12;
-  const key = findKey(notes);
-  const scale = key.minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+  const found = findMaqam(notes, { ticksPerBeat, beatsPerBar });
+  const maqam = MAQAMS[found.maqam];
+  const scale = maqam.scale;
   const candidates = [];
   for (let d = 0; d < 7; d++) {
-    if ((scale[(d + 4) % 7] - scale[d] + 12) % 12 !== 7) continue; // no diminished
-    candidates.push({ root: (key.tonic + scale[d]) % 12, minor: (scale[(d + 2) % 7] - scale[d] + 12) % 12 === 3 });
+    if ((scale[(d + 4) % 7] - scale[d] + 12) % 12 !== 7) continue; // no diminished or augmented
+    candidates.push({ root: (found.tonic + scale[d]) % 12, minor: (scale[(d + 2) % 7] - scale[d] + 12) % 12 === 3 });
   }
-  if (key.minor) candidates.push({ root: (key.tonic + 7) % 12, minor: false });
+  if (maqam.also?.includes(11)) candidates.push({ root: (found.tonic + 7) % 12, minor: false });
   const tones = (c) => [c.root, (c.root + (c.minor ? 3 : 4)) % 12, (c.root + 7) % 12];
   const bar = ticksPerBeat * beatsPerBar;
   const end = Math.max(...notes.map((n) => n.t + n.d));
   const chords = [];
-  let previous = { root: key.tonic, minor: key.minor };
+  let previous = { root: found.tonic, minor: maqam.minor };
   for (let from = 0; from < end; from += bar) {
     const w = new Array(12).fill(0);
     for (const n of notes) {
@@ -626,7 +681,7 @@ export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {})
         let s = 0;
         for (let p = 0; p < 12; p++) s += t.includes(p) ? w[p] : -0.5 * w[p];
         if (c.root === previous.root && c.minor === previous.minor) s += 0.15 * total;
-        if (c.root === key.tonic) s += 0.05 * total;
+        if (c.root === found.tonic) s += 0.05 * total;
         return s;
       };
       previous = candidates.reduce((a, b) => (score(b) > score(a) ? b : a));
@@ -649,6 +704,7 @@ export function toJson(meta, notes, chords = []) {
     bpm: meta.bpm,
     ticksPerBeat: meta.ticksPerBeat ?? 4,
     beatsPerBar: meta.beatsPerBar ?? 4,
+    ...(meta.maqam ? { maqam: meta.maqam } : {}),
   };
   const lines = [...notes]
     .sort((a, b) => a.t - b.t)

@@ -29,8 +29,9 @@ Songs live as JSON files in `assets/songs/<id>.json`. Yalla Studio
 | `bpm` | Beats per minute at normal speed. |
 | `ticksPerBeat` | The smallest step of the song; 4 means sixteenth notes in 4/4. Default 4. |
 | `beatsPerBar` | Beats per bar, for bar lines and the metronome's stress. Default 4. |
+| `maqam` | Optional: the maqam Yalla Studio heard in the melody, as in `D Nahawand` (Ajam, Nahawand, Kurd or Hijaz on a tonic). For information; the app does not read it yet. |
 | `notes` | One object per note, in any order. |
-| `chords` | Optional: the backing's chords, in any order. Without them the app picks chords from the melody. |
+| `chords` | Optional: the backing's chords, in any order. Yalla Studio fills them in from the melody's maqam when a song comes in without any. A file without them the app still harmonizes by major or minor key. |
 
 Each note:
 
