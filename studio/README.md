@@ -18,8 +18,9 @@ Open <https://rooneyhannan.github.io/YALLA-PLAY/studio/> in a desktop browser:
    A song that comes in without chords gets them at once from its maqam: the
    melody's scale and final note give Ajam, Nahawand, Kurd or Hijaz on a tonic
    (shown next to **Akkorde vorschlagen**), and each bar the maqam's triad that
-   holds most of it. Maqamat with quarter tones sound on frets like their nearest
-   relative (Rast like Ajam, Bayati like Kurd) and are found as that.
+   holds most of it. These chords follow the notes when they are computed anew or
+   shifted, until a chord is changed by hand. Maqamat with quarter tones sound on frets like their nearest
+   relative (Rast like Ajam, Bayati like Kurd or Nahawand) and are found as that.
 3. **JSON speichern**: a `yalla-song/1` file (see `docs/song-format.md`) for
    `assets/songs/`.
 

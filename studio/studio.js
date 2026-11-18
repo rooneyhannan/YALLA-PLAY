@@ -616,7 +616,7 @@ const exportGp5 = () => gp5(state.meta, state.notes, state.chords);
 
 function exportJson() {
   return toJson(
-    state.meta,
+    { ...state.meta, maqam: state.notes.length ? findMaqam(state.notes, state.meta).name : undefined },
     state.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger })),
     state.chords,
   );
@@ -772,7 +772,8 @@ function rearrange() {
     state.notes = chartNotes(state.detected, { bpm: state.meta.bpm, offset: state.offset, ticksPerBeat: state.meta.ticksPerBeat, ...next })
       .map((n) => ({ ...n, fingerAuto: true }));
     const shift = next.transpose - before.transpose;
-    if (shift) state.chords = state.chords.map((c) => ({ ...c, name: transposeChord(c.name, shift) }));
+    // Chords the Studio chose are chosen anew for the new notes.
+    if (shift && !state.chordsAuto) state.chords = state.chords.map((c) => ({ ...c, name: transposeChord(c.name, shift) }));
     state.selected = -1;
   });
   writeArrange();
@@ -793,14 +794,24 @@ for (const [id, step] of [['shift-left', -1], ['shift-right', 1]]) {
 /** A song without chords gets them from its maqam, as soon as it is opened:
  * returns a note for the status line, empty when the song had chords. */
 function autoChords() {
+  state.chordsAuto = false;
   if (state.chords.length || !state.notes.length) return '';
   state.chords = suggestChords(state.notes, state.meta);
-  return ` · Maqam ${findMaqam(state.notes).name}, ${state.chords.length} Akkorde vorgeschlagen`;
+  state.chordsAuto = true;
+  return ` · Maqam ${findMaqam(state.notes, state.meta).name}, ${state.chords.length} Akkorde vorgeschlagen`;
+}
+
+/** Chords the Studio chose follow the notes, after recomputing, shifting or
+ * editing them, until a chord is changed by hand. */
+function followNotes(chordsBefore) {
+  if (!state.chordsAuto) return;
+  if (JSON.stringify(state.chords) !== chordsBefore) state.chordsAuto = false;
+  else state.chords = suggestChords(state.notes, state.meta);
 }
 
 /** The maqam the melody is heard in, next to the chord buttons. */
 function showMaqam() {
-  $('maqam').textContent = state.notes.length ? `Maqam: ${findMaqam(state.notes).name}` : '';
+  $('maqam').textContent = state.notes.length ? `Maqam: ${findMaqam(state.notes, state.meta).name}` : '';
 }
 
 function setNotes(notes) {
@@ -816,7 +827,7 @@ function refinger() {
 
 /** Applies an edit so that it can be undone. */
 const snapshot = () => JSON.stringify({
-  notes: state.notes, chords: state.chords, selected: state.selected, selectedChord: state.selectedChord,
+  notes: state.notes, chords: state.chords, chordsAuto: state.chordsAuto, selected: state.selected, selectedChord: state.selectedChord,
   arrange: state.arrange, bpm: state.meta.bpm, offset: state.offset,
 });
 
@@ -826,8 +837,10 @@ function change(edit) {
   redo.length = 0;
   const selectedNote = state.notes[state.selected];
   const chord = state.chords[state.selectedChord];
+  const chordsBefore = JSON.stringify(state.chords);
   edit();
   setNotes(state.notes);
+  followNotes(chordsBefore);
   state.chords.sort((a, b) => a.t - b.t);
   if (selectedNote) state.selected = state.notes.indexOf(selectedNote);
   if (chord) state.selectedChord = state.chords.indexOf(chord);
@@ -842,6 +855,7 @@ function restore(from, to) {
   const saved = JSON.parse(from.pop());
   state.notes = saved.notes;
   state.chords = saved.chords ?? [];
+  state.chordsAuto = saved.chordsAuto ?? false;
   state.selected = Math.min(saved.selected, state.notes.length - 1);
   state.selectedChord = Math.min(saved.selectedChord ?? -1, state.chords.length - 1);
   state.arrange = saved.arrange;
@@ -986,10 +1000,11 @@ $('suggest-chords').addEventListener('click', () => {
   if (!state.notes.length) return;
   if (state.chords.length && !confirm('Die vorhandenen Akkorde werden durch Vorschläge ersetzt. Weiter?')) return;
   change(() => { state.chords = suggestChords(state.notes, state.meta); });
+  state.chordsAuto = true;
   state.selectedChord = -1;
   inspect();
   draw();
-  setStatus(`${state.chords.length} Akkorde nach Maqam ${findMaqam(state.notes).name} vorgeschlagen, bitte anhören und anpassen`);
+  setStatus(`${state.chords.length} Akkorde nach Maqam ${findMaqam(state.notes, state.meta).name} vorgeschlagen, bitte anhören und anpassen`);
 });
 
 document.addEventListener('keydown', (e) => {
@@ -1338,14 +1353,17 @@ canvas.addEventListener('pointerup', () => {
   if (drag?.moved && drag.chord) {
     state.chords.sort((a, b) => a.t - b.t);
     state.selectedChord = state.chords.indexOf(drag.note);
+    state.chordsAuto = false;
     state.edited = true;
     inspect();
     draw();
   } else if (drag?.moved) {
     const note = drag.note;
     setNotes(state.notes);
+    followNotes(JSON.stringify(state.chords));
     state.selected = state.notes.indexOf(note);
     state.edited = true;
+    showMaqam();
     inspect();
     draw();
   }

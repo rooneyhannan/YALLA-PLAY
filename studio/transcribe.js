@@ -595,7 +595,7 @@ export function findKey(notes) {
  * The maqamat a fretted guitar can play: their scales in semitones from the
  * tonic. Maqamat with quarter tones (Rast, Bayati, Saba, Sikah) cannot sound
  * on frets; a guitar plays them bent or as their nearest relative here
- * (Bayati as Kurd, Rast as Ajam), and so they are found as that.
+ * (Bayati as Kurd or Nahawand, Rast as Ajam), and so they are found as that.
  * Nahawand may raise its seventh going up to the tonic, as in harmonic minor.
  */
 export const MAQAMS = {
@@ -613,14 +613,19 @@ export const MAQAMS = {
  * tonic the melody stays on and comes to rest on: an Arabic melody ends on
  * its tonic (qarar).
  */
-export function findMaqam(notes) {
+export function findMaqam(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {}) {
   const weight = new Array(12).fill(0);
   for (const n of notes) weight[midiOf(n.s, n.f) % 12] += n.d;
   const total = weight.reduce((a, b) => a + b, 0);
+  // The note the melody comes to rest on: the longest of its last bar, the
+  // later one of equal length, so that a short stray note
+  // heard at the end does not decide.
   let final = null;
   if (notes.length && notes.every((n) => n.t != null)) {
-    const last = notes.reduce((a, b) => (b.t + b.d > a.t + a.d ? b : a));
-    final = midiOf(last.s, last.f) % 12;
+    const end = Math.max(...notes.map((n) => n.t + n.d));
+    const rest = notes.filter((n) => n.t + n.d > end - ticksPerBeat * beatsPerBar)
+      .reduce((a, b) => (b.d > a.d || (b.d === a.d && b.t > a.t) ? b : a));
+    final = midiOf(rest.s, rest.f) % 12;
   }
   let best = { tonic: 0, maqam: 'ajam' }, bestScore = -Infinity;
   for (const [maqam, m] of Object.entries(MAQAMS)) {
@@ -632,7 +637,7 @@ export function findMaqam(notes) {
         else if (!m.also?.includes(step)) s -= 2 * weight[p];
       }
       s += 0.5 * weight[tonic] + 0.25 * weight[(tonic + 7) % 12];
-      if (tonic === final) s += 0.3 * total;
+      if (tonic === final) s += 0.2 * total;
       if (s > bestScore) { bestScore = s; best = { tonic, maqam }; }
     }
   }
@@ -649,7 +654,7 @@ export function findMaqam(notes) {
 export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {}) {
   if (!notes.length) return [];
   const pc = (n) => midiOf(n.s, n.f) % 12;
-  const found = findMaqam(notes);
+  const found = findMaqam(notes, { ticksPerBeat, beatsPerBar });
   const maqam = MAQAMS[found.maqam];
   const scale = maqam.scale;
   const candidates = [];
@@ -699,6 +704,7 @@ export function toJson(meta, notes, chords = []) {
     bpm: meta.bpm,
     ticksPerBeat: meta.ticksPerBeat ?? 4,
     beatsPerBar: meta.beatsPerBar ?? 4,
+    ...(meta.maqam ? { maqam: meta.maqam } : {}),
   };
   const lines = [...notes]
     .sort((a, b) => a.t - b.t)
