@@ -41,6 +41,15 @@ void main() {
     // 18 bars: twice the first part of five bars, then the second of eight.
     final last = chart.notes.last;
     expect(last.tick + last.note.d, 18 * 20);
+    // Its fourth bar stays on F sharp, the leading note of G minor: an
+    // accidental in ABC holds to the end of the bar.
+    const open = [64, 59, 55, 50, 45, 40];
+    final bar = [
+      for (final n in chart.notes)
+        if (n.tick >= 60 && n.tick < 80) (open[n.note.s - 1] + n.note.f) % 12,
+    ];
+    expect(bar, containsAll([6, 7, 3, 2]));
+    expect(bar, isNot(contains(5)));
   });
 
   test('rests, fingers and other tempos come through', () {

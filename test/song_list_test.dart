@@ -53,7 +53,7 @@ void main() {
     expect(find.byKey(const ValueKey('song-badak')), findsOneWidget);
     expect(find.byKey(const ValueKey('demo-badak')), findsNothing);
     expect(find.byKey(const ValueKey('demo-enta-omri')), findsOneWidget);
-    // Ba’dak, the song with a chart, leads the row.
+    // Ba’dak, a song with a chart, comes before those without.
     final badak = tester.getTopLeft(find.byKey(const ValueKey('song-badak')));
     final other = tester.getTopLeft(
       find.byKey(const ValueKey('song-enta-omri')),
