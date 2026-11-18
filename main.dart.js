@@ -94409,17 +94409,14 @@ A.aBv.prototype={
 $2(a,b){return b>=a&&b<=a+3},
 $S:128}
 A.aBw.prototype={
-$6(a,b,c,d,e,f){var s,r,q,p,o,n,m,l
+$6(a,b,c,d,e,f){var s,r,q,p
 if(b===a)return 0
 s=b-a
 r=d-c
-q=Math.abs(r-s)
-p=r===0||B.f.gt6(r)!==B.f.gt6(s)
-o=q>1?q-1:0
-n=p?1.5:0
-m=f?0.8:0
-l=1+0.05*Math.abs(s)+0.4*q+o+n+m
-return e?l/2:l},
+if(B.f.gt6(r)!==B.f.gt6(s)||Math.abs(s)>Math.abs(r))return 1/0
+q=f?0.8:0
+p=0.05*Math.abs(s)+Math.abs(r-s)+q
+return 1e6+(e?p/2:p)},
 $S:572}
 A.aCb.prototype={
 $1(a){return Math.abs(this.a-a)<=40},
@@ -95771,7 +95768,7 @@ A.auw.prototype={
 $0(){return this.a.d=0},
 $S:0}
 A.auE.prototype={
-$0(){return A.IL(this.a,"\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a \u0648\u0627\u0644\u0625\u0646\u062c\u0627\u0632\u0627\u062a \u0633\u062a\u062a\u0648\u0641\u0631 \u0642\u0631\u064a\u0628\u0627\u064b. \u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u0623\u063a\u0627\u0646\u064a \u0648\u0627\u0628\u062f\u0623 \u0627\u0644\u0639\u0632\u0641 \u0627\u0644\u0622\u0646.\n\n\u0627\u0644\u0625\u0635\u062f\u0627\u0631 2026-11-18.1927","\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a")},
+$0(){return A.IL(this.a,"\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a \u0648\u0627\u0644\u0625\u0646\u062c\u0627\u0632\u0627\u062a \u0633\u062a\u062a\u0648\u0641\u0631 \u0642\u0631\u064a\u0628\u0627\u064b. \u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u0623\u063a\u0627\u0646\u064a \u0648\u0627\u0628\u062f\u0623 \u0627\u0644\u0639\u0632\u0641 \u0627\u0644\u0622\u0646.\n\n\u0627\u0644\u0625\u0635\u062f\u0627\u0631 2026-11-18.2032","\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a")},
 $S:0}
 A.Ae.prototype={
 ar(){return new A.Z7()},
@@ -103548,7 +103545,7 @@ B.ahv=new A.bF("\u0627\u0628\u062f\u0623 \u0627\u0644\u0627\u0633\u062a\u0645\u0
 B.ahx=new A.bF("\u062d\u0630\u0641 \u0627\u0644\u0623\u063a\u0646\u064a\u0629\u061f",null,null,null,null,null,null,null,null)
 B.ad2=new A.j(!0,B.pV,null,null,null,null,12,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.ajp=new A.b5("tuner-footer",t.O)
-B.ahy=new A.bF("E \xb7 A \xb7 D \xb7 G \xb7 H \xb7 E   \xb7   v2026-11-18.1927",null,B.ad2,null,B.i,null,null,null,B.ajp)
+B.ahy=new A.bF("E \xb7 A \xb7 D \xb7 G \xb7 H \xb7 E   \xb7   v2026-11-18.2032",null,B.ad2,null,B.i,null,null,null,B.ajp)
 B.ahz=new A.bF("\u0627\u0644\u0639\u0632\u0641",null,null,null,null,null,null,null,null)
 B.ahA=new A.bF("\u0645\u0631\u0629 \u0623\u062e\u0631\u0649",null,null,null,null,null,null,null,null)
 B.ahB=new A.bF("\u062d\u0633\u0646\u0627\u064b",null,null,null,null,null,null,null,null)
