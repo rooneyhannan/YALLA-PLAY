@@ -33,6 +33,8 @@ class RecordingEngine implements SoundEngine {
   @override
   double? get time => 10;
   @override
+  void prepare(Voice voice, double frequency) {}
+  @override
   void play(
     Voice voice,
     double frequency, {

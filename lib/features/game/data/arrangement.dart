@@ -164,13 +164,17 @@ class Arrangement {
           );
         }
       } else if (strummed(bar)) {
-        // Down on the beats, up on the off-beats but the first: the
-        // pattern of D, D U, U D U in 4/4.
+        // Down on the beats, up on the off-beats: D, D U, U D U in 4/4,
+        // no stroke after the one and on the three.
+        bool rests(int k) =>
+            subdivide && (k == 1 || (stepsPerBar == 8 && k == 4));
         final down = inBar.isEven;
-        final skip = subdivide && inBar == 1;
-        if (!skip) {
-          final next = subdivide && inBar == 0 ? 2 * step : step;
-          final length = math.min(next, span.end - t);
+        if (!rests(inBar)) {
+          var next = inBar + 1;
+          while (next < stepsPerBar && rests(next)) {
+            next++;
+          }
+          final length = math.min((next - inBar) * step, span.end - t);
           _strum(
             events,
             chord,
@@ -184,8 +188,10 @@ class Arrangement {
         }
       } else {
         // Picked: thumb on the lowest string, then the fingers up and
-        // down, p i m a m i.
-        const pattern = [0, 1, 2, 3, 2, 1];
+        // down, p i m a m i, over all five strings in a bar of eight.
+        final pattern = stepsPerBar == 8
+            ? const [0, 1, 2, 3, 4, 3, 2, 1]
+            : const [0, 1, 2, 3, 2, 1];
         final voicing = _guitarVoicing(chord);
         final midi = voicing[pattern[inBar % pattern.length] % voicing.length];
         final length = math.min(2 * step, span.end - t);
@@ -207,9 +213,15 @@ class Arrangement {
         final length = math.min(halfBar, span.end - t);
         final avoidBass = asked(t, t + length);
         final first = (t - firstBeat) % barTicks < 1e-6;
+        // The fifth of the chord; diminished and augmented ones have
+        // their own.
+        final fifth =
+            (chord.root +
+                chord.intervals[math.min(2, chord.intervals.length - 1)]) %
+            12;
         final pc = [
           if (first) chord.bassNote,
-          (chord.root + 7) % 12,
+          fifth,
           if (!first) chord.bassNote,
           ...chord.tones,
         ].where((pc) => !avoidBass.contains(pc)).firstOrNull;

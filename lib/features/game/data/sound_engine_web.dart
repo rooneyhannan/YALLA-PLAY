@@ -37,6 +37,22 @@ class WebSoundEngine implements SoundEngine {
   @override
   double? get time => _ctx?.currentTime;
 
+  web.AudioBuffer _buffer(
+    web.AudioContext ctx,
+    Voice voice,
+    double frequency,
+  ) => _buffers.putIfAbsent('${voice.name}:${frequency.toStringAsFixed(1)}', () {
+    final samples = synthesize(voice, frequency, ctx.sampleRate.round());
+    return ctx.createBuffer(1, samples.length, ctx.sampleRate)
+      ..copyToChannel(samples.toJS, 0);
+  });
+
+  @override
+  void prepare(Voice voice, double frequency) {
+    final ctx = _ctx;
+    if (ctx != null) _buffer(ctx, voice, frequency);
+  }
+
   @override
   void play(
     Voice voice,
@@ -47,14 +63,7 @@ class WebSoundEngine implements SoundEngine {
   }) {
     final ctx = _ctx, out = _out;
     if (ctx == null || out == null) return;
-    final buffer = _buffers.putIfAbsent(
-      '${voice.name}:${frequency.toStringAsFixed(1)}',
-      () {
-        final samples = synthesize(voice, frequency, ctx.sampleRate.round());
-        return ctx.createBuffer(1, samples.length, ctx.sampleRate)
-          ..copyToChannel(samples.toJS, 0);
-      },
-    );
+    final buffer = _buffer(ctx, voice, frequency);
     final release = releaseSeconds(voice);
     final level = ctx.createGain();
     level.gain

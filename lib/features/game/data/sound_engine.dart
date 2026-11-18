@@ -12,6 +12,10 @@ abstract class SoundEngine {
   /// The audio clock in seconds, or null while there is no sound.
   double? get time;
 
+  /// Builds the sound of [voice] at [frequency] now, so playing it later
+  /// costs nothing.
+  void prepare(Voice voice, double frequency);
+
   /// Plays [voice] at [frequency] from [at] on the clock for [length]
   /// seconds, then fades it out.
   void play(

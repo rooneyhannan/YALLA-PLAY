@@ -35,8 +35,16 @@ Float32List synthesize(Voice voice, double frequency, int sampleRate) =>
       Voice.click => _click(1000, .5, sampleRate),
       Voice.accent => _click(1600, .8, sampleRate),
       Voice.guitar => _pluck(frequency, sampleRate),
-      Voice.chord => _pluck(frequency, sampleRate, soften: .5, decay: .995),
-      Voice.harmony => _pluck(frequency, sampleRate, soften: .55, decay: .996),
+      // Long enough to ring out the last chord, even at half speed.
+      Voice.chord => _pluck(
+        frequency,
+        sampleRate,
+        soften: .5,
+        decay: .995,
+        seconds: 6,
+      ),
+      // Sung rather than plucked: a soft tone that holds.
+      Voice.harmony => _tone(frequency, sampleRate, const [1, .25, .08], 3),
       Voice.bass => _tone(frequency, sampleRate, const [1, .5, .2], .9),
       Voice.strings => _strings(frequency, sampleRate),
     };
@@ -59,8 +67,9 @@ Float32List _pluck(
   int rate, {
   double soften = .4,
   double decay = .997,
+  double seconds = 2.5,
 }) {
-  final out = Float32List((rate * 2.5).round());
+  final out = Float32List((rate * seconds).round());
   final period = math.max(2, (rate / hz).round());
   final random = math.Random(hz.round());
   final line = List<double>.generate(
@@ -87,7 +96,7 @@ Float32List _tone(
   List<double> harmonics,
   double decaySeconds,
 ) {
-  final out = Float32List((rate * 2.5).round());
+  final out = Float32List((rate * math.max(2.5, decaySeconds * 2)).round());
   for (var i = 0; i < out.length; i++) {
     final t = i / rate;
     final attack = math.min(1.0, t / .008);

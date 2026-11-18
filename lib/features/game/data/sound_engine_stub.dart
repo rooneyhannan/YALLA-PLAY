@@ -12,6 +12,9 @@ class _SilentSoundEngine implements SoundEngine {
   double? get time => null;
 
   @override
+  void prepare(Voice voice, double frequency) {}
+
+  @override
   void play(
     Voice voice,
     double frequency, {
