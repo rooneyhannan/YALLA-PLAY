@@ -93,7 +93,7 @@ void main() {
   });
 
   test('a second and a third voice sing under a long note', () {
-    // A4 held for two beats in bar 5, a strummed bar, over F major: F4 a
+    // A4 held for two beats in bar 5 over F major: F4 a
     // third below, C4 under that, never the A the player plays.
     final arrangement = Arrangement.of(
       [(start: 64, length: 8, frequency: 440)],
