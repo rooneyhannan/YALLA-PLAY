@@ -242,7 +242,8 @@ test('fingers: random tunes keep the rules with the fewest shifts', () => {
   for (let n = 0; n < 300; n++) {
     let f = 1 + Math.floor(random() * 12);
     const frets = [];
-    for (let i = 0; i < 4 + Math.floor(random() * 30); i++) {
+    const length = 4 + Math.floor(random() * 30);
+    for (let i = 0; i < length; i++) {
       if (random() < 0.15) { frets.push(0); continue; }
       f = Math.min(20, Math.max(1, f + Math.round((random() - 0.5) * 10)));
       frets.push(f);

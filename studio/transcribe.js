@@ -445,7 +445,7 @@ export function assignFingers(frets) {
       // Rule 1 outweighs everything else; then rule 3 (how much the finger
       // changes) and the gentler preferences.
       const fingerChange = Math.abs(step - hand);
-      const detail = fingerChange + (shifted ? 0.8 : 0) + 0.05 * Math.abs(hand);
+      const detail = 0.05 * Math.abs(hand) + fingerChange + (shifted ? 0.8 : 0);
       return SHIFT_COST + (free ? detail / 2 : detail);
     };
     // States 2p (hand in position p) and 2p + 1 (just shifted there).
