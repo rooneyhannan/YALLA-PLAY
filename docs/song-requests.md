@@ -15,8 +15,10 @@ Interpret, Hinweis). Claude turns one request into a song like this:
    not by eye (in ABC an accidental holds to the end of its bar).
 4. **App.** Put the file into `assets/songs/` and set `chart: '<id>'` on
    the song's entry in `lib/core/models/song.dart`, adding the entry when
-   the song is new. Open a pull request; the request goes to
-   **Bitte prüfen**, with the pull request in **Ergebnis**.
+   the song is new. Open a pull request and merge it once the
+   "Flutter review build" check is green; GitHub Pages then has the song
+   a few minutes later. The request goes to **Bitte prüfen**, with the
+   pull request in **Ergebnis**.
 5. Once Rooney has heard it, the request goes to **In der App**.
 
 The first one: `lamma-bada.json`, „لما بدا يتثنى“, from the ABC by Tous aux
