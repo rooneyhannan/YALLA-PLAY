@@ -1,4 +1,5 @@
 import 'dart:js_interop';
+import 'dart:math' as math;
 
 import 'package:web/web.dart' as web;
 
@@ -54,16 +55,17 @@ class WebSoundEngine implements SoundEngine {
           ..copyToChannel(samples.toJS, 0);
       },
     );
+    final release = releaseSeconds(voice);
     final level = ctx.createGain();
     level.gain
       ..setValueAtTime(gain, at)
-      // Released like a lifted finger rather than cut.
-      ..setTargetAtTime(0, at + length, .03);
+      // Released like a lifted finger or bow rather than cut.
+      ..setTargetAtTime(0, at + length, release);
     final source = ctx.createBufferSource()..buffer = buffer;
     source
       ..connect(level)
       ..start(at)
-      ..stop(at + length + .25);
+      ..stop(at + length + math.max(.25, 8 * release));
     level.connect(out);
     _sources.add(source);
     source.onended = ((web.Event _) {

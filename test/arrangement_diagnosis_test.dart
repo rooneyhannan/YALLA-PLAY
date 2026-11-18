@@ -205,8 +205,11 @@ String arrangementReport(SongChart chart) {
   ];
   final chordTones = <double, Set<int>>{}, bass = <double, int>{};
   for (final e in arrangement.events) {
-    if (e.voice == Voice.chord) {
-      (chordTones[e.tick] ??= <int>{}).add(pitchClass(e.frequency));
+    if (e.voice == Voice.chord || e.voice == Voice.strings) {
+      // Strummed strings follow each other by milliseconds, picked ones by
+      // eighths: everything starting on a beat counts for that beat.
+      final onBeat = lead + ((e.tick - lead) / beat + 1e-6).floor() * beat;
+      (chordTones[onBeat] ??= <int>{}).add(pitchClass(e.frequency));
     } else if (e.voice == Voice.bass) {
       bass[e.tick] = pitchClass(e.frequency);
     }

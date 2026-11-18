@@ -56,6 +56,13 @@ Each chord:
 The backing never plays the pitch the player is asked for at that moment, in
 any octave, so the microphone hears only the guitar for it.
 
+How the backing plays the chords: a second guitar picks them (arpeggio) for
+four bars, then strums them for four (down on the beats, up on the
+off-beats), in turns, and ends on one strummed chord. A bass plays the
+chord's bass note on the first beat and its fifth halfway through the bar,
+strings hold the chord underneath, and in the strummed bars a second and
+third voice sing a third and a fifth or sixth under long melody notes.
+
 Yalla Studio can open the app's songs (**📚 Song aus der App**) and keep a
 changed one in the browser's storage (`yalla.songEdits`); the app on that
 device then plays it instead of the file here.

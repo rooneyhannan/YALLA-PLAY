@@ -205,7 +205,7 @@ class _GameScreenState extends State<GameScreen>
   /// hears it.
   bool _audible(SoundEvent e) => switch (e.voice) {
     Voice.click || Voice.accent => _metronome,
-    Voice.chord || Voice.bass => _backing,
+    Voice.chord || Voice.bass || Voice.strings || Voice.harmony => _backing,
     Voice.guitar => _backing && !_listening,
   };
 

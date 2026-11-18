@@ -51,29 +51,60 @@ void main() {
         (start: 32, length: 16, chord: ChordSymbol.tryParse('C/E')!),
       ],
     );
-    List<int> classesAt(double tick, Voice voice) => [
+    // What the guitar and the strings start on the beat from [tick].
+    Set<int> chordAt(double tick) => {
       for (final e in arrangement.events)
-        if (e.tick == tick && e.voice == voice) pitchClass(e.frequency),
-    ];
+        if (e.tick >= tick - 1e-6 &&
+            e.tick < tick + 4 - 1e-6 &&
+            (e.voice == Voice.chord || e.voice == Voice.strings))
+          pitchClass(e.frequency),
+    };
 
     test('plays exactly those chords', () {
-      expect(classesAt(0, Voice.chord).toSet(), {2, 5, 9});
-      expect(classesAt(32, Voice.chord).toSet(), {0, 4, 7});
+      expect(chordAt(0), {2, 5, 9});
+      expect(chordAt(32), {0, 4, 7});
     });
 
     test('leaves out the note the player is asked for', () {
       // A is part of D minor, but the player plays A at tick 8.
-      expect(classesAt(8, Voice.chord), isNot(contains(9)));
-      expect(classesAt(8, Voice.chord), isNotEmpty);
+      expect(chordAt(8), isNot(contains(9)));
+      expect(chordAt(8), isNotEmpty);
     });
 
     test('is silent where the song has no chord', () {
-      expect(classesAt(16, Voice.chord), isEmpty);
-      expect(classesAt(20, Voice.chord), isEmpty);
+      final gap = arrangement.events.where(
+        (e) => e.voice != Voice.click && e.voice != Voice.accent,
+      );
+      for (final e in gap) {
+        expect(
+          e.tick + e.length <= 16 + 1e-6 || e.tick >= 32 - 1e-6,
+          isTrue,
+          reason: '${e.voice.name} at ${e.tick}',
+        );
+      }
     });
 
     test('plays the slash note in the bass', () {
-      expect(classesAt(32, Voice.bass), [4]);
+      expect([
+        for (final e in arrangement.events)
+          if (e.tick == 32 && e.voice == Voice.bass) pitchClass(e.frequency),
+      ], [4]);
     });
+  });
+
+  test('a second and a third voice sing under a long note', () {
+    // A4 held for two beats in bar 5, a strummed bar, over F major: F4 a
+    // third below, C4 under that, never the A the player plays.
+    final arrangement = Arrangement.of(
+      [(start: 64, length: 8, frequency: 440)],
+      firstBeat: 0,
+      end: 128,
+      chords: [(start: 0, length: 128, chord: ChordSymbol.tryParse('F')!)],
+    );
+    final voices = [
+      for (final e in arrangement.events)
+        if (e.voice == Voice.harmony) (e.tick, pitchClass(e.frequency)),
+    ];
+    expect(voices, unorderedEquals([(64.0, 5), (64.0, 0)]));
   });
 }

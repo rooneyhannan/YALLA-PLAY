@@ -111,44 +111,196 @@ class Arrangement {
       return given ? null : spans.first.chord;
     }
 
-    // Soft chords on every beat, a bass note every half bar.
-    for (var t = firstBeat; t < last; t += beatTicks) {
+    // The span sounding at a tick, with where it ends; none in the gaps
+    // between given chords.
+    ({ChordSymbol chord, double end})? spanAt(double t) {
       final chord = chordAt(t);
-      if (chord == null) continue;
-      final avoid = asked(t, t + beatTicks);
-      // Between G3 and F#4: under and around the melody.
-      final voicing = [
-        for (final pc in chord.tones)
-          if (!avoid.contains(pc)) 55 + (pc - 55) % 12,
-      ];
-      // A tone left out for the player is made up by doubling one of the
-      // chord's other tones an octave up. Nothing foreign is added: the
-      // guitar plays the missing tone, and a substitute such as the seventh
-      // would turn the chord into another (A minor without A plus G sounds
-      // like C major).
-      if (voicing.length < 3 && voicing.isNotEmpty) {
-        voicing.add(voicing.reduce(math.min) + 12);
+      if (chord == null) return null;
+      final span = spans.lastWhere(
+        (c) => c.start <= t + 1e-6,
+        orElse: () => spans.first,
+      );
+      final end = span.start + span.length;
+      // Chosen chords last a bar each; the last one carries on to the end.
+      return (chord: chord, end: !given && t >= end - 1e-6 ? last : end);
+    }
+
+    // The backing moves on a grid of eighths in 4/4 and similar metres, on
+    // every beat when a bar has many (10/8): never faster than four strokes
+    // a second at normal speed.
+    final beatsPerBar = (barTicks / beatTicks).round();
+    final subdivide = beatsPerBar <= 4 && beatTicks / 2 / ticksPerSecond >= .25;
+    final step = subdivide ? beatTicks / 2 : beatTicks;
+    final stepsPerBar = (barTicks / step).round();
+    final lastBar = math.max(
+      0,
+      ((last - firstBeat) / barTicks - 1e-6).floor(),
+    );
+    // Bars of four: picked (arpeggio) first, strummed next, in turns. The
+    // last bar rings out on one strummed chord.
+    bool strummed(int bar) => bar == lastBar || (bar ~/ 4).isOdd;
+    final strumGap = .012 * ticksPerSecond;
+
+    for (var i = 0; ; i++) {
+      final t = firstBeat + i * step;
+      if (t >= last - 1e-6) break;
+      final span = spanAt(t);
+      if (span == null) continue;
+      final chord = span.chord;
+      final bar = i ~/ stepsPerBar, inBar = i % stepsPerBar;
+      // The second guitar.
+      if (bar == lastBar) {
+        if (inBar == 0) {
+          final length = math.min(span.end, firstBeat + (bar + 1) * barTicks);
+          _strum(
+            events,
+            chord,
+            t,
+            length - t,
+            asked(t, length),
+            down: true,
+            gain: .11,
+            gap: strumGap,
+          );
+        }
+      } else if (strummed(bar)) {
+        // Down on the beats, up on the off-beats but the first: the
+        // pattern of D, D U, U D U in 4/4.
+        final down = inBar.isEven;
+        final skip = subdivide && inBar == 1;
+        if (!skip) {
+          final next = subdivide && inBar == 0 ? 2 * step : step;
+          final length = math.min(next, span.end - t);
+          _strum(
+            events,
+            chord,
+            t,
+            length,
+            asked(t, t + length),
+            down: down,
+            gain: inBar == 0 ? .11 : (down ? .085 : .06),
+            gap: strumGap,
+          );
+        }
+      } else {
+        // Picked: thumb on the lowest string, then the fingers up and
+        // down, p i m a m i.
+        const pattern = [0, 1, 2, 3, 2, 1];
+        final voicing = _guitarVoicing(chord);
+        final midi = voicing[pattern[inBar % pattern.length] % voicing.length];
+        final length = math.min(2 * step, span.end - t);
+        if (!asked(t, t + length).contains(midi % 12)) {
+          events.add(
+            SoundEvent(
+              t,
+              Voice.chord,
+              _midiFrequency(midi),
+              length,
+              inBar == 0 ? .16 : .13,
+            ),
+          );
+        }
       }
-      for (final midi in voicing) {
-        events.add(
-          SoundEvent(t, Voice.chord, _midiFrequency(midi), beatTicks, .16),
-        );
-      }
-      if ((t - firstBeat) % halfBar == 0) {
-        final avoidBass = asked(t, t + halfBar);
-        // The bass note of the chord, else its fifth or another tone of it.
+      // The bass: the chord's bass note on the first beat, its fifth
+      // halfway through the bar.
+      if ((t - firstBeat) % halfBar < 1e-6) {
+        final length = math.min(halfBar, span.end - t);
+        final avoidBass = asked(t, t + length);
+        final first = (t - firstBeat) % barTicks < 1e-6;
         final pc = [
-          chord.bassNote,
+          if (first) chord.bassNote,
           (chord.root + 7) % 12,
+          if (!first) chord.bassNote,
           ...chord.tones,
         ].where((pc) => !avoidBass.contains(pc)).firstOrNull;
         if (pc != null) {
           // Between E2 and D#3, below the guitar's melody.
           final midi = 40 + (pc - 40) % 12;
           events.add(
-            SoundEvent(t, Voice.bass, _midiFrequency(midi), halfBar, .3),
+            SoundEvent(t, Voice.bass, _midiFrequency(midi), length, .3),
           );
         }
+      }
+    }
+
+    // Strings hold the chord underneath, each tone as long as the player
+    // is not asked for it, bowed afresh at least every three seconds.
+    final padTail = .5 * ticksPerSecond;
+    final maxPad = math.max(step, (3 * ticksPerSecond / step).floor() * step);
+    final open = <int, ({double start, double until})>{};
+    void close(int midi) {
+      final n = open.remove(midi)!;
+      events.add(
+        SoundEvent(
+          n.start,
+          Voice.strings,
+          _midiFrequency(midi),
+          n.until - n.start,
+          .05,
+        ),
+      );
+    }
+
+    for (var i = 0; ; i++) {
+      final t = firstBeat + i * step;
+      if (t >= last - 1e-6) break;
+      final span = spanAt(t);
+      final until = span == null ? t : math.min(t + step, span.end);
+      final avoid = span == null ? const <int>{} : asked(t, until + padTail);
+      final voicing = {
+        if (span != null)
+          for (final pc in span.chord.tones)
+            if (!avoid.contains(pc)) 55 + (pc - 55) % 12,
+      };
+      for (final midi in [...open.keys]) {
+        final n = open[midi]!;
+        if (!voicing.contains(midi) ||
+            (n.until - t).abs() > 1e-6 ||
+            until - n.start > maxPad + 1e-6) {
+          close(midi);
+        }
+      }
+      for (final midi in voicing) {
+        final n = open[midi];
+        open[midi] = (start: n?.start ?? t, until: until);
+      }
+    }
+    for (final midi in [...open.keys]) {
+      close(midi);
+    }
+
+    // Now and then a second voice under the melody, a third under that on
+    // long notes: in the strummed bars, on notes of a beat or longer, from
+    // the chord's own tones.
+    for (final n in melody) {
+      if (n.length < beatTicks - 1e-6) continue;
+      final bar = ((n.start - firstBeat) / barTicks + 1e-6).floor();
+      if (bar < 0 || bar == lastBar || !strummed(bar)) continue;
+      final span = spanAt(n.start);
+      if (span == null) continue;
+      final length = math.min(n.length, span.end - n.start);
+      final avoid = asked(n.start, n.start + length);
+      int? below(int midi) {
+        for (final d in const [3, 4, 5]) {
+          final m = midi - d;
+          if (m >= 48 &&
+              span.chord.tones.contains(m % 12) &&
+              !avoid.contains(m % 12)) {
+            return m;
+          }
+        }
+        return null;
+      }
+
+      final melodyMidi =
+          (12 * math.log(n.frequency / 440) / math.ln2 + 69).round();
+      final second = below(melodyMidi);
+      if (second == null) continue;
+      final third = n.length >= 2 * beatTicks - 1e-6 ? below(second) : null;
+      for (final m in [second, if (third != null) third]) {
+        events.add(
+          SoundEvent(n.start, Voice.harmony, _midiFrequency(m), length, .12),
+        );
       }
     }
 
@@ -157,6 +309,59 @@ class Arrangement {
     }
     events.sort((a, b) => a.tick.compareTo(b.tick));
     return Arrangement._(events, spans);
+  }
+
+  /// The chord as a guitar holds it, lowest string first: its root between
+  /// C3 and B3, then its tones upwards, five strings up to G4.
+  static List<int> _guitarVoicing(ChordSymbol chord) {
+    final voicing = [48 + (chord.bassNote - 48) % 12];
+    final order = [for (final i in chord.intervals) (chord.root + i) % 12];
+    for (var k = 0; voicing.length < 5 && k < 24; k++) {
+      final pc = order[k % order.length];
+      if (pc == voicing.last % 12) continue;
+      var midi = voicing.last + 1;
+      while (midi % 12 != pc) {
+        midi++;
+      }
+      if (midi > 67) break;
+      voicing.add(midi);
+    }
+    return voicing;
+  }
+
+  /// One stroke of the strumming guitar: down from the lowest string to
+  /// the highest, or up over the top three, a few milliseconds apart. A
+  /// tone the player is asked for is left out; nothing foreign takes its
+  /// place.
+  static void _strum(
+    List<SoundEvent> events,
+    ChordSymbol chord,
+    double t,
+    double length,
+    Set<int> avoid, {
+    required bool down,
+    required double gain,
+    required double gap,
+  }) {
+    if (length <= 1e-6) return;
+    final all = _guitarVoicing(chord);
+    final strings = down
+        ? all
+        : all.sublist(math.max(0, all.length - 3)).reversed.toList();
+    var k = 0;
+    for (final midi in strings) {
+      if (avoid.contains(midi % 12)) continue;
+      final at = t + k++ * gap;
+      events.add(
+        SoundEvent(
+          at,
+          Voice.chord,
+          _midiFrequency(midi),
+          length - (at - t),
+          gain,
+        ),
+      );
+    }
   }
 
   /// Picks a chord for every bar: the triad of the song's key that

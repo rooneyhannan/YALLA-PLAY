@@ -51,9 +51,20 @@ void main() {
   final end = melody.last.start + melody.last.length + 6;
   final arrangement = Arrangement.of(melody, firstBeat: 6, end: end);
 
+  const backingVoices = {
+    Voice.chord,
+    Voice.bass,
+    Voice.strings,
+    Voice.harmony,
+  };
+
   test('the backing never sounds a pitch the player is asked for', () {
     final backing = arrangement.events.where(
-      (e) => e.voice == Voice.chord || e.voice == Voice.bass,
+      (e) => backingVoices.contains(e.voice),
+    );
+    expect(
+      {for (final e in backing) e.voice},
+      containsAll({Voice.chord, Voice.bass, Voice.strings}),
     );
     expect(backing, isNotEmpty);
     for (final e in backing) {
@@ -75,13 +86,44 @@ void main() {
   });
 
   test('the backing is full: most beats have a chord of two tones or more', () {
-    final perBeat = <double, int>{};
-    for (final e in arrangement.events.where((e) => e.voice == Voice.chord)) {
-      perBeat[e.tick] = (perBeat[e.tick] ?? 0) + 1;
+    final perBeat = <int, Set<int>>{};
+    for (final e in arrangement.events.where(
+      (e) => e.voice == Voice.chord || e.voice == Voice.strings,
+    )) {
+      (perBeat[((e.tick - 6) / 4 + 1e-6).floor()] ??= {}).add(
+        pitchClass(e.frequency),
+      );
     }
     final beats = ((melody.last.start + melody.last.length - 6) / 4).ceil();
-    final full = perBeat.values.where((n) => n >= 2).length;
+    final full = perBeat.values.where((n) => n.length >= 2).length;
     expect(full / beats, greaterThan(.6));
+  });
+
+  test('the guitar picks in some bars and strums in others', () {
+    // Bars of four: picked first, then strummed. A strum sounds several
+    // strings within a few hundredths of a second, picking one at a time.
+    int stringsAt(int bar, int eighth) => arrangement.events
+        .where(
+          (e) =>
+              e.voice == Voice.chord &&
+              e.tick >= 6 + bar * 16 + eighth * 2 - 1e-6 &&
+              e.tick < 6 + bar * 16 + eighth * 2 + .5,
+        )
+        .length;
+    expect(stringsAt(0, 0), lessThanOrEqualTo(1));
+    expect(stringsAt(0, 2), lessThanOrEqualTo(1));
+    expect(stringsAt(4, 0), greaterThanOrEqualTo(2));
+    expect(stringsAt(4, 1), 0, reason: 'no up-stroke right after the one');
+  });
+
+  test('strings hold the chord over the beats', () {
+    final strings = arrangement.events.where((e) => e.voice == Voice.strings);
+    expect(strings, isNotEmpty);
+    expect(strings.where((e) => e.length >= 4), isNotEmpty);
+    for (final e in strings) {
+      // At most three seconds a bow, so the sound lasts even at half speed.
+      expect(e.length, lessThanOrEqualTo(3 * 6 + 1e-6));
+    }
   });
 
   test('the metronome stresses the first beat of every bar', () {
@@ -105,7 +147,12 @@ void main() {
   test('the backing adds no tone foreign to the chord', () {
     // Leaving out the player's pitch must not turn the chord into another,
     // as a seventh would (A minor without A plus G sounds like C major).
-    for (final e in arrangement.events.where((e) => e.voice == Voice.chord)) {
+    for (final e in arrangement.events.where(
+      (e) =>
+          e.voice == Voice.chord ||
+          e.voice == Voice.strings ||
+          e.voice == Voice.harmony,
+    )) {
       final span = arrangement.chords.lastWhere(
         (c) => c.start <= e.tick + 1e-6,
       );
