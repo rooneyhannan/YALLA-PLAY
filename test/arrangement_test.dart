@@ -55,6 +55,7 @@ void main() {
 
   const backingVoices = {
     Voice.chord,
+    Voice.picked,
     Voice.bass,
     Voice.strings,
     Voice.harmony,
@@ -101,21 +102,52 @@ void main() {
     expect(full / beats, greaterThan(.6));
   });
 
-  test('the guitar picks in some bars and strums in others', () {
-    // Bars of four: picked first, then strummed. A strum sounds several
-    // strings within a few hundredths of a second, picking one at a time.
-    int stringsAt(int bar, int eighth) => arrangement.events
+  test('one guitar strums while the other picks, in every bar', () {
+    // A strum sounds several strings within a few hundredths of a second,
+    // picking one at a time.
+    int count(Voice voice, int bar, int eighth) => arrangement.events
         .where(
           (e) =>
-              e.voice == Voice.chord &&
+              e.voice == voice &&
               e.tick >= 6 + bar * 16 + eighth * 2 - 1e-6 &&
               e.tick < 6 + bar * 16 + eighth * 2 + .5,
         )
         .length;
-    expect(stringsAt(0, 0), lessThanOrEqualTo(1));
-    expect(stringsAt(0, 2), lessThanOrEqualTo(1));
-    expect(stringsAt(4, 0), greaterThanOrEqualTo(2));
-    expect(stringsAt(4, 1), 0, reason: 'no up-stroke right after the one');
+    expect(count(Voice.chord, 4, 0), greaterThanOrEqualTo(2));
+    final bars = ((melody.last.start + melody.last.length - 6) / 16).ceil();
+    for (var bar = 0; bar < bars - 1; bar++) {
+      expect(count(Voice.chord, bar, 1), 0, reason: 'no up-stroke after one');
+      expect(count(Voice.picked, bar, 0), lessThanOrEqualTo(1));
+    }
+    // No more bars of only one of them: both guitars play throughout.
+    bool plays(Voice voice, int bar) => arrangement.events.any(
+      (e) =>
+          e.voice == voice &&
+          e.tick >= 6 + bar * 16 - 1e-6 &&
+          e.tick < 6 + (bar + 1) * 16 - 1e-6,
+    );
+    final both = [
+      for (var bar = 0; bar < bars - 1; bar++)
+        if (plays(Voice.chord, bar) && plays(Voice.picked, bar)) bar,
+    ];
+    expect(both.length / (bars - 1), greaterThan(.9));
+  });
+
+  test('played by hand: strokes vary a little, never before the beat', () {
+    final strokes = arrangement.events.where(
+      (e) => e.voice == Voice.chord || e.voice == Voice.picked,
+    );
+    expect({for (final e in strokes) e.gain}.length, greaterThan(10));
+    for (final e in strokes) {
+      final offGrid = (e.tick - 6) % 2;
+      expect(offGrid, lessThan(.5), reason: '${e.voice.name} at ${e.tick}');
+    }
+    // The same song always sounds the same.
+    final again = Arrangement.of(melody, firstBeat: 6, end: end);
+    expect(
+      [for (final e in again.events) (e.tick, e.gain)],
+      [for (final e in arrangement.events) (e.tick, e.gain)],
+    );
   });
 
   test('strings hold the chord over the beats', () {
@@ -152,6 +184,7 @@ void main() {
     for (final e in arrangement.events.where(
       (e) =>
           e.voice == Voice.chord ||
+          e.voice == Voice.picked ||
           e.voice == Voice.strings ||
           e.voice == Voice.harmony,
     )) {

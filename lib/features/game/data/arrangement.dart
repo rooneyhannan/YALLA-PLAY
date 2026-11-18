@@ -136,10 +136,15 @@ class Arrangement {
       0,
       ((last - firstBeat) / barTicks - 1e-6).floor(),
     );
-    // Bars of four: picked (arpeggio) first, strummed next, in turns. The
-    // last bar rings out on one strummed chord.
-    bool strummed(int bar) => bar == lastBar || (bar ~/ 4).isOdd;
-    final strumGap = .012 * ticksPerSecond;
+    // Two guitars at once in every bar: one strums, the other picks the
+    // chord note by note. The last bar rings out on one strummed chord.
+    final strumGap = .016 * ticksPerSecond;
+    // Played by hand: every stroke a touch behind the grid, never ahead of
+    // it so nothing sounds before its chord, and a little louder or softer
+    // than the one before. Seeded, so a song always sounds the same.
+    final hand = math.Random(7);
+    double late() => hand.nextDouble() * .015 * ticksPerSecond;
+    double touch() => .88 + .24 * hand.nextDouble();
 
     for (var i = 0; ; i++) {
       final t = firstBeat + i * step;
@@ -148,7 +153,6 @@ class Arrangement {
       if (span == null) continue;
       final chord = span.chord;
       final bar = i ~/ stepsPerBar, inBar = i % stepsPerBar;
-      // The second guitar.
       if (bar == lastBar) {
         if (inBar == 0) {
           final length = math.min(span.end, firstBeat + (bar + 1) * barTicks);
@@ -163,9 +167,9 @@ class Arrangement {
             gap: strumGap,
           );
         }
-      } else if (strummed(bar)) {
-        // Down on the beats, up on the off-beats: D, D U, U D U in 4/4,
-        // no stroke after the one and on the three.
+      } else {
+        // The strumming guitar: down on the beats, up on the off-beats,
+        // D, D U, U D U in 4/4, no stroke after the one and on the three.
         bool rests(int k) =>
             subdivide && (k == 1 || (stepsPerBar == 8 && k == 4));
         final down = inBar.isEven;
@@ -175,34 +179,39 @@ class Arrangement {
             next++;
           }
           final length = math.min((next - inBar) * step, span.end - t);
+          final at = t + late();
           _strum(
             events,
             chord,
-            t,
-            length,
+            at,
+            length - (at - t),
             asked(t, t + length),
             down: down,
-            gain: inBar == 0 ? .11 : (down ? .085 : .06),
+            gain: (inBar == 0 ? .1 : (down ? .08 : .055)) * touch(),
             gap: strumGap,
           );
         }
-      } else {
-        // Picked: thumb on the lowest string, then the fingers up and
-        // down, p i m a m i, over all five strings in a bar of eight.
+        // The picking guitar: thumb on the lowest string, then the
+        // fingers up and down, p i m a m i, over all five strings in a bar
+        // of eight, letting each note ring under the next. The fingers play
+        // an octave above the strumming guitar, so the two do not blur.
         final pattern = stepsPerBar == 8
             ? const [0, 1, 2, 3, 4, 3, 2, 1]
             : const [0, 1, 2, 3, 2, 1];
         final voicing = _guitarVoicing(chord);
-        final midi = voicing[pattern[inBar % pattern.length] % voicing.length];
+        final string = pattern[inBar % pattern.length] % voicing.length;
+        final midi = voicing[string] + (string == 0 ? 0 : 12);
         final length = math.min(2 * step, span.end - t);
-        if (!asked(t, t + length).contains(midi % 12)) {
+        final at = t + late();
+        if (length - (at - t) > 1e-6 &&
+            !asked(t, t + length).contains(midi % 12)) {
           events.add(
             SoundEvent(
-              t,
-              Voice.chord,
+              at,
+              Voice.picked,
               _midiFrequency(midi),
-              length,
-              inBar == 0 ? .16 : .13,
+              length - (at - t),
+              (inBar == 0 ? .12 : .095) * touch(),
             ),
           );
         }
@@ -248,7 +257,7 @@ class Arrangement {
           Voice.strings,
           _midiFrequency(midi),
           n.until - n.start,
-          .05,
+          .065,
         ),
       );
     }
@@ -282,12 +291,12 @@ class Arrangement {
     }
 
     // Now and then a second voice under the melody, a third under that on
-    // long notes: in the strummed bars, on notes of a beat or longer, from
-    // the chord's own tones.
+    // long notes: on notes of a beat or longer, from the chord's own tones,
+    // in every bar but the last.
     for (final n in melody) {
       if (n.length < beatTicks - 1e-6) continue;
       final bar = ((n.start - firstBeat) / barTicks + 1e-6).floor();
-      if (bar < 0 || bar == lastBar || !strummed(bar)) continue;
+      if (bar < 0 || bar == lastBar) continue;
       final span = spanAt(n.start);
       if (span == null) continue;
       final length = math.min(n.length, span.end - n.start);
@@ -364,6 +373,8 @@ class Arrangement {
     for (final midi in strings) {
       if (avoid.contains(midi % 12)) continue;
       final at = t + k++ * gap;
+      // A chord ending off the grid cuts the last strings of a stroke.
+      if (length - (at - t) <= 1e-6) break;
       events.add(
         SoundEvent(
           at,
