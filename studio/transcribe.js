@@ -413,14 +413,22 @@ export function assignTab(midis) {
   return out;
 }
 
+/** What one shift costs: more than every other preference of a song together. */
+const SHIFT_COST = 1e6;
+
 /**
  * One finger per fret, as in the app: the hand sits with the index at fret
- * p and fingers 1–4 over frets p … p+3, shifting as little as possible.
- * A shift has to feel natural: the hand moves with the melody and about as
- * far as it does (ideally one finger slides along), never against it or
- * far for a small step (pinky on fret 5, then index on fret 6), and not
- * straight after another shift. An open string in between frees the hand,
- * so shifting there is cheaper.
+ * p and fingers 1–4 over frets p … p+3. Rooney's rules, in this order:
+ * 1. As few shifts (position changes) as possible.
+ * 2. A shift never goes against the fingers: moving up the neck the next
+ *    finger is never a lower one (not 3 on fret 5, then 2 on fret 8), moving
+ *    down never a higher one (not 1, then 3). So the hand moves with the
+ *    melody and never further than it does. This one is never broken; a
+ *    shift that keeps it is always possible.
+ * 3. Ideally the same finger slides along (hand and melody move alike).
+ * After that: not straight after another shift, a shift over an open string
+ * (the hand is free there), short moves, lower positions.
+ * The app has the same rule (assignFingers in lib/features/game/data/fingering.dart).
  */
 export function assignFingers(frets) {
   const maxPosition = 21;
@@ -432,12 +440,13 @@ export function assignFingers(frets) {
     const shift = (q, p, from, to, free, shifted) => {
       if (p === q) return 0;
       const hand = p - q, step = to - from;
-      // Finger change = how much further the hand moves than the melody.
+      // Rule 2: with the melody and never further than it.
+      if (Math.sign(step) !== Math.sign(hand) || Math.abs(hand) > Math.abs(step)) return Infinity;
+      // Rule 1 outweighs everything else; then rule 3 (how much the finger
+      // changes) and the gentler preferences.
       const fingerChange = Math.abs(step - hand);
-      const against = step === 0 || Math.sign(step) !== Math.sign(hand);
-      const cost = 1 + 0.05 * Math.abs(hand) + 0.4 * fingerChange + Math.max(0, fingerChange - 1) +
-        (against ? 1.5 : 0) + (shifted ? 0.8 : 0);
-      return free ? cost / 2 : cost;
+      const detail = fingerChange + (shifted ? 0.8 : 0) + 0.05 * Math.abs(hand);
+      return SHIFT_COST + (free ? detail / 2 : detail);
     };
     // States 2p (hand in position p) and 2p + 1 (just shifted there).
     const states = 2 * (maxPosition + 1);

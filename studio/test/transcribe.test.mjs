@@ -170,24 +170,84 @@ test('fingers: one finger per fret, shifting only when needed', () => {
   assert.deepEqual(assignFingers([5, 6, 7, 8, 6, 5]), [1, 2, 3, 4, 2, 1]);
 });
 
-test('fingers: the hand shifts with the melody, never pinky 5 to index 6', () => {
-  assert.deepEqual(assignFingers([3, 5, 6, 8, 6, 6, 5, 5, 3, 3, 2, 3]), [1, 3, 4, 4, 2, 2, 1, 1, 2, 2, 1, 2]);
+/** Hand positions (index finger's fret) of the fretted notes, in order. */
+const handOf = (frets, fingers) => frets.flatMap((f, i) => (f ? [{ i, f, p: f - fingers[i] + 1 }] : []));
+
+/** Rooney's rule 2, checked between every two fretted notes; returns the shifts. */
+function checkShifts(frets, fingers, label = '') {
+  let shifts = 0;
+  const hand = handOf(frets, fingers);
+  for (let k = 1; k < hand.length; k++) {
+    const a = hand[k - 1], b = hand[k];
+    const move = b.p - a.p, step = b.f - a.f;
+    assert.ok(fingers[b.i] >= 1 && fingers[b.i] <= 4, `${label} note ${b.i}: finger ${fingers[b.i]}`);
+    if (!move) continue;
+    shifts++;
+    const where = `${label} note ${b.i}: fret ${a.f} finger ${fingers[a.i]} → fret ${b.f} finger ${fingers[b.i]}`;
+    // Up the neck never to a lower finger, down never to a higher one.
+    if (step > 0) assert.ok(move > 0 && fingers[b.i] >= fingers[a.i], where);
+    else assert.ok(step < 0 && move < 0 && fingers[b.i] <= fingers[a.i], where);
+  }
+  return shifts;
+}
+
+/** The fewest shifts that keep rule 2, worked out on its own (no preferences). */
+function fewestShifts(frets) {
+  const fretted = frets.filter((f) => f > 0);
+  if (!fretted.length) return 0;
+  const fits = (p, f) => f >= p && f <= p + 3;
+  let best = new Map();
+  for (let p = 1; p <= 21; p++) if (fits(p, fretted[0])) best.set(p, 0);
+  for (let k = 1; k < fretted.length; k++) {
+    const step = fretted[k] - fretted[k - 1], next = new Map();
+    for (const [q, n] of best) {
+      for (let p = 1; p <= 21; p++) {
+        if (!fits(p, fretted[k])) continue;
+        const move = p - q;
+        if (move && (Math.sign(move) !== Math.sign(step) || Math.abs(move) > Math.abs(step))) continue;
+        const c = n + (move ? 1 : 0);
+        if (!next.has(p) || c < next.get(p)) next.set(p, c);
+      }
+    }
+    best = next;
+  }
+  return Math.min(...best.values());
+}
+
+test('fingers: Rooney\'s rules for shifts', () => {
+  // Fret 5 to 8 with a shift: finger 3 then 2 would go against the hand.
+  // Here the hand moves with the melody and the same finger slides along.
+  const lamma = [3, 5, 6, 8, 6, 6, 5, 5, 3, 3, 2, 3];
+  assert.deepEqual(assignFingers(lamma), [1, 1, 2, 4, 4, 4, 4, 4, 2, 2, 1, 2]);
+  assert.equal(checkShifts(lamma, assignFingers(lamma)), fewestShifts(lamma));
+  // Down from fret 8 (pinky) to 3: the next finger is never a higher one,
+  // and changes as little as it can (pinky → ring, not → index).
+  assert.deepEqual(assignFingers([5, 6, 7, 8, 3]), [1, 2, 3, 4, 3]);
+  // Up fret by fret: the fingers never go back down (no pinky 4 → index 5).
+  const run = [1, 2, 3, 4, 5, 6];
+  assert.deepEqual(assignFingers(run), [1, 2, 3, 3, 4, 4]);
+  assert.equal(checkShifts(run, assignFingers(run)), fewestShifts(run));
+});
+
+test('fingers: the songs keep the rules with the fewest shifts', () => {
   for (const id of ['badak', 'lamma-bada']) {
     const frets = read(`../../assets/songs/${id}.json`).notes.map((n) => n.f);
-    const fingers = assignFingers(frets);
-    let last = -1;
-    frets.forEach((f, i) => {
-      if (!f) return;
-      if (last >= 0) {
-        const hand = (f - fingers[i]) - (frets[last] - fingers[last]), step = f - frets[last];
-        const where = `${id} note ${i}: ${frets[last]}/${fingers[last]} → ${f}/${fingers[i]}`;
-        if (hand) {
-          assert.equal(Math.sign(step), Math.sign(hand), where);
-          assert.ok(Math.abs(step - hand) <= 1, where);
-        }
-      }
-      last = i;
-    });
+    assert.equal(checkShifts(frets, assignFingers(frets), id), fewestShifts(frets), id);
+  }
+});
+
+test('fingers: random tunes keep the rules with the fewest shifts', () => {
+  let seed = 7;
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let n = 0; n < 300; n++) {
+    let f = 1 + Math.floor(random() * 12);
+    const frets = [];
+    for (let i = 0; i < 4 + Math.floor(random() * 30); i++) {
+      if (random() < 0.15) { frets.push(0); continue; }
+      f = Math.min(20, Math.max(1, f + Math.round((random() - 0.5) * 10)));
+      frets.push(f);
+    }
+    assert.equal(checkShifts(frets, assignFingers(frets), frets.join(',')), fewestShifts(frets), frets.join(','));
   }
 });
 
