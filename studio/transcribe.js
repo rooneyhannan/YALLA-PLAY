@@ -418,48 +418,53 @@ export function assignTab(midis) {
  * p and fingers 1–4 over frets p … p+3, shifting as little as possible.
  * A shift has to feel natural: the hand moves with the melody and about as
  * far as it does (ideally one finger slides along), never against it or
- * far for a small step (pinky on fret 5, then index on fret 6). An open
- * string in between frees the hand, so shifting there is cheaper.
+ * far for a small step (pinky on fret 5, then index on fret 6), and not
+ * straight after another shift. An open string in between frees the hand,
+ * so shifting there is cheaper.
  */
 export function assignFingers(frets) {
-  const maxPosition = 20;
+  const maxPosition = 21;
   const fits = (p, f) => f >= p && f <= p + 3;
   const fretted = [];
   frets.forEach((f, i) => { if (f > 0) fretted.push(i); });
   const positionsOut = new Array(frets.length).fill(0);
   if (fretted.length) {
-    const shift = (q, p, from, to, free) => {
+    const shift = (q, p, from, to, free, shifted) => {
       if (p === q) return 0;
       const hand = p - q, step = to - from;
       // Finger change = how much further the hand moves than the melody.
       const fingerChange = Math.abs(step - hand);
       const against = step === 0 || Math.sign(step) !== Math.sign(hand);
-      const cost = 1 + 0.05 * Math.abs(hand) + 0.4 * fingerChange + Math.max(0, fingerChange - 1) + (against ? 1.5 : 0);
+      const cost = 1 + 0.05 * Math.abs(hand) + 0.4 * fingerChange + Math.max(0, fingerChange - 1) +
+        (against ? 1.5 : 0) + (shifted ? 0.8 : 0);
       return free ? cost / 2 : cost;
     };
-    let cost = [];
-    for (let p = 0; p <= maxPosition; p++) cost.push(p > 0 && fits(p, frets[fretted[0]]) ? p * 0.001 : Infinity);
+    // States 2p (hand in position p) and 2p + 1 (just shifted there).
+    const states = 2 * (maxPosition + 1);
+    let cost = new Array(states).fill(Infinity);
+    for (let p = 1; p <= maxPosition; p++) if (fits(p, frets[fretted[0]])) cost[2 * p] = p * 0.001;
     const back = [];
     for (let k = 1; k < fretted.length; k++) {
       const a = fretted[k - 1], b = fretted[k];
       const free = b - a > 1;
-      const next = new Array(maxPosition + 1).fill(Infinity), from = new Array(maxPosition + 1).fill(0);
+      const next = new Array(states).fill(Infinity), from = new Array(states).fill(0);
       for (let p = 1; p <= maxPosition; p++) {
         if (!fits(p, frets[b])) continue;
-        for (let q = 1; q <= maxPosition; q++) {
-          if (cost[q] === Infinity) continue;
-          const c = cost[q] + shift(q, p, frets[a], frets[b], free) + p * 0.001;
-          if (c < next[p]) { next[p] = c; from[p] = q; }
+        for (let s = 2; s < states; s++) {
+          if (cost[s] === Infinity) continue;
+          const q = s >> 1, to = 2 * p + (p === q ? 0 : 1);
+          const c = cost[s] + shift(q, p, frets[a], frets[b], free, s % 2 === 1) + p * 0.001;
+          if (c < next[to]) { next[to] = c; from[to] = s; }
         }
       }
       back.push(from);
       cost = next;
     }
-    let p = 1;
-    for (let q = 1; q <= maxPosition; q++) if (cost[q] < cost[p]) p = q;
+    let s = 2;
+    for (let t = 2; t < states; t++) if (cost[t] < cost[s]) s = t;
     for (let k = fretted.length - 1; k >= 0; k--) {
-      positionsOut[fretted[k]] = p;
-      if (k > 0) p = back[k - 1][p];
+      positionsOut[fretted[k]] = s >> 1;
+      if (k > 0) s = back[k - 1][s];
     }
   }
   return frets.map((f, i) => (f === 0 ? 0 : f - positionsOut[i] + 1));
