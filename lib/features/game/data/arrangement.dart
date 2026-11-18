@@ -143,7 +143,7 @@ class Arrangement {
     // it so nothing sounds before its chord, and a little louder or softer
     // than the one before. Seeded, so a song always sounds the same.
     final hand = math.Random(7);
-    double late() => hand.nextDouble() * .008 * ticksPerSecond;
+    double late() => hand.nextDouble() * .015 * ticksPerSecond;
     double touch() => .88 + .24 * hand.nextDouble();
 
     for (var i = 0; ; i++) {
@@ -193,12 +193,14 @@ class Arrangement {
         }
         // The picking guitar: thumb on the lowest string, then the
         // fingers up and down, p i m a m i, over all five strings in a bar
-        // of eight, letting each note ring under the next.
+        // of eight, letting each note ring under the next. The fingers play
+        // an octave above the strumming guitar, so the two do not blur.
         final pattern = stepsPerBar == 8
             ? const [0, 1, 2, 3, 4, 3, 2, 1]
             : const [0, 1, 2, 3, 2, 1];
         final voicing = _guitarVoicing(chord);
-        final midi = voicing[pattern[inBar % pattern.length] % voicing.length];
+        final string = pattern[inBar % pattern.length] % voicing.length;
+        final midi = voicing[string] + (string == 0 ? 0 : 12);
         final length = math.min(2 * step, span.end - t);
         final at = t + late();
         if (length - (at - t) > 1e-6 &&
@@ -371,6 +373,8 @@ class Arrangement {
     for (final midi in strings) {
       if (avoid.contains(midi % 12)) continue;
       final at = t + k++ * gap;
+      // A chord ending off the grid cuts the last strings of a stroke.
+      if (length - (at - t) <= 1e-6) break;
       events.add(
         SoundEvent(
           at,

@@ -38,18 +38,20 @@ class WebSoundEngine implements SoundEngine {
       glue.ratio.value = 2.5;
       glue.attack.value = .01;
       glue.release.value = .25;
+      // Lower than before: the compressor makes up some of it.
       _out = ctx.createGain()
-        ..gain.value = .8
+        ..gain.value = .6
         ..connect(glue);
       _clicks = ctx.createGain()
-        ..gain.value = .8
+        ..gain.value = .7
         ..connect(ctx.destination);
       // A small warm room: a backing without one sounds dead, as if
-      // played into a pillow.
+      // played into a pillow. Short, so a tone's echo has died away before
+      // the player is asked for it.
       final reverb = ctx.createConvolver()..buffer = _roomResponse(ctx);
       reverb.connect(_out!);
       _room = ctx.createGain()
-        ..gain.value = .35
+        ..gain.value = .3
         ..connect(reverb);
       await ctx.resume().toDart;
     } catch (_) {
@@ -60,12 +62,12 @@ class WebSoundEngine implements SoundEngine {
   @override
   double? get time => _ctx?.currentTime;
 
-  /// The echo of a small room, in stereo: noise dying away over about
-  /// 1.8 seconds, its highs fading faster than its lows, as walls and air
+  /// The echo of a small room, in stereo: noise dying away within under
+  /// a second, its highs fading faster than its lows, as walls and air
   /// swallow them. Seeded, so the room is the same every time.
   static web.AudioBuffer _roomResponse(web.AudioContext ctx) {
     final rate = ctx.sampleRate;
-    final length = (rate * 1.8).round();
+    final length = (rate * .8).round();
     final buffer = ctx.createBuffer(2, length, rate);
     for (var channel = 0; channel < 2; channel++) {
       final random = math.Random(31 + channel);
@@ -74,11 +76,11 @@ class WebSoundEngine implements SoundEngine {
       for (var i = 0; i < length; i++) {
         final t = i / rate;
         // Darker as it dies away.
-        final smooth = math.min(.97, .35 + t * .9);
+        final smooth = math.min(.97, .35 + t * 2);
         low = (1 - smooth) * (random.nextDouble() * 2 - 1) + smooth * low;
         // A few milliseconds of silence before the first reflections.
         final onset = math.min(1.0, math.max(0.0, (t - .008) / .01));
-        samples[i] = onset * low * math.exp(-t / .38);
+        samples[i] = onset * low * math.exp(-t / .14);
       }
       buffer.copyToChannel(samples.toJS, channel);
     }

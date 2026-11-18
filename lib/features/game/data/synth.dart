@@ -171,16 +171,26 @@ Float32List _strings(
   // A gentle low-pass, the body of the instruments.
   final smooth = math.exp(-2 * math.pi * brightness / rate);
   var last = 0.0;
+  // Each player's step through the table, renewed every few samples:
+  // vibrato changes far too slowly to need more, and it saves most of the
+  // work.
+  final advance = List.filled(detune.length, 0.0);
   for (var i = 0; i < out.length; i++) {
     final t = i / rate;
-    // Vibrato sets in after the bow has settled, as players do.
-    final depth = .003 * math.min(1.0, t / .6);
+    if (i % 32 == 0) {
+      // Vibrato sets in after the bow has settled, as players do.
+      final depth = .003 * math.min(1.0, t / .6);
+      for (var k = 0; k < detune.length; k++) {
+        final wobble = math.sin(
+          2 * math.pi * vibratoHz[k] * t + vibratoPhase[k],
+        );
+        advance[k] = hz * (1 + detune[k]) * (1 + depth * wobble) / rate;
+      }
+    }
     var v = 0.0;
     for (var k = 0; k < detune.length; k++) {
       v += table[(phase[k] * size).floor() % size];
-      final wobble = math.sin(2 * math.pi * vibratoHz[k] * t + vibratoPhase[k]);
-      final vibrato = 1 + depth * wobble;
-      phase[k] = (phase[k] + hz * (1 + detune[k]) * vibrato / rate) % 1;
+      phase[k] = (phase[k] + advance[k]) % 1;
     }
     last = (1 - smooth) * v + smooth * last;
     final swell = math.min(1.0, t / attack);
