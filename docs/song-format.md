@@ -30,7 +30,7 @@ Songs live as JSON files in `assets/songs/<id>.json`. Yalla Studio
 | `ticksPerBeat` | The smallest step of the song; 4 means sixteenth notes in 4/4. Default 4. |
 | `beatsPerBar` | Beats per bar, for bar lines and the metronome's stress. Default 4. |
 | `notes` | One object per note, in any order. |
-| `chords` | Optional: the backing's chords, in any order. Without them the app picks chords from the melody. |
+| `chords` | Optional: the backing's chords, in any order. Yalla Studio fills them in from the melody's maqam when a song comes in without any; without them the app picks chords from the melody. |
 
 Each note:
 

@@ -1,7 +1,7 @@
 // Yalla Studio: open a recording, let Basic Pitch find its notes, turn them
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
-  CHORD_QUALITIES, ROOT_NAMES, appSongIds, assignFingers, chartNotes, chordName, chordTones, detectTempo, fromJson,
+  CHORD_QUALITIES, ROOT_NAMES, appSongIds, assignFingers, chartNotes, chordName, chordTones, detectTempo, findMaqam, fromJson,
   hz, midiOf, noteName, onsetEnergy, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord, withAttacks,
 } from './transcribe.js';
 import { gp5 } from './guitarpro.js';
@@ -105,9 +105,10 @@ async function openAudio(file, { asked = false } = {}) {
     state.offset = tempo.offset;
     setNotes(chartNotes(detected, { ...tempo, ticksPerBeat: 4, ...state.arrange }).map((n) => ({ ...n, fingerAuto: true })));
     state.chords = [];
+    const maqam = autoChords();
     undo.length = redo.length = 0;
     state.edited = false;
-    openEditor(`${state.notes.length} Noten erkannt · Tempo ${tempo.bpm} BPM`);
+    openEditor(`${state.notes.length} Noten erkannt · Tempo ${tempo.bpm} BPM` + maqam);
   } catch (error) {
     if (error.cancelled) return hideProgress();
     console.error(error);
@@ -138,11 +139,13 @@ function loadSong(data, origin = null) {
   };
   setNotes(data.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger ?? null, fingerAuto: n.finger == null })));
   state.chords = (data.chords ?? []).map((c) => ({ t: c.t, d: c.d, name: c.name })).sort((a, b) => a.t - b.t);
+  const given = state.chords.length;
+  const maqam = autoChords();
   state.detected = null;
   state.arrange = { mode: 'single', simplify: 0, transpose: 0 };
   undo.length = redo.length = 0;
   state.edited = false;
-  openEditor(`${state.notes.length} Noten${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} geladen`, origin);
+  openEditor(`${state.notes.length} Noten${given ? `, ${given} Akkorde` : ''} geladen` + maqam, origin);
 }
 
 // ---------------------------------------------------------------- the app's songs
@@ -473,6 +476,8 @@ async function openGp(file) {
   state.meta = song.meta;
   setNotes(song.notes.map((n) => ({ ...n, fingerAuto: n.finger == null })));
   state.chords = song.chords;
+  const given = state.chords.length;
+  const maqam = autoChords();
   state.detected = null;
   state.audio = null;
   state.offset = 0;
@@ -481,8 +486,8 @@ async function openGp(file) {
   undo.length = redo.length = 0;
   state.edited = false;
   const name = score.tracks[index].name;
-  openEditor(`${state.notes.length} Noten aus „${name}“${state.chords.length ? `, ${state.chords.length} Akkorde` : ''} · ${song.meta.bpm} BPM` +
-    (song.retuned ? ' · auf Standardstimmung umgelegt' : ''));
+  openEditor(`${state.notes.length} Noten aus „${name}“${given ? `, ${given} Akkorde` : ''} · ${song.meta.bpm} BPM` +
+    (song.retuned ? ' · auf Standardstimmung umgelegt' : '') + maqam);
 }
 
 /** Asks which track to take; resolves with its index, or null. */
@@ -683,6 +688,7 @@ function openEditor(status, origin = null) {
   $('save-gp5').disabled = false;
   $('to-app').disabled = false;
   writeMeta();
+  showMaqam();
   state.selected = -1;
   state.selectedChord = -1;
   state.scroll = 0;
@@ -784,6 +790,19 @@ for (const [id, step] of [['shift-left', -1], ['shift-right', 1]]) {
 
 // ---------------------------------------------------------------- editing
 
+/** A song without chords gets them from its maqam, as soon as it is opened:
+ * returns a note for the status line, empty when the song had chords. */
+function autoChords() {
+  if (state.chords.length || !state.notes.length) return '';
+  state.chords = suggestChords(state.notes, state.meta);
+  return ` · Maqam ${findMaqam(state.notes).name}, ${state.chords.length} Akkorde vorgeschlagen`;
+}
+
+/** The maqam the melody is heard in, next to the chord buttons. */
+function showMaqam() {
+  $('maqam').textContent = state.notes.length ? `Maqam: ${findMaqam(state.notes).name}` : '';
+}
+
 function setNotes(notes) {
   state.notes = notes.sort((a, b) => a.t - b.t || a.s - b.s);
   refinger();
@@ -813,6 +832,7 @@ function change(edit) {
   if (selectedNote) state.selected = state.notes.indexOf(selectedNote);
   if (chord) state.selectedChord = state.chords.indexOf(chord);
   state.edited = true;
+  showMaqam();
   inspect();
   draw();
 }
@@ -829,6 +849,7 @@ function restore(from, to) {
   state.offset = saved.offset;
   writeArrange();
   state.edited = true;
+  showMaqam();
   inspect();
   draw();
 }
@@ -968,7 +989,7 @@ $('suggest-chords').addEventListener('click', () => {
   state.selectedChord = -1;
   inspect();
   draw();
-  setStatus(`${state.chords.length} Akkorde vorgeschlagen, bitte anhören und anpassen`);
+  setStatus(`${state.chords.length} Akkorde nach Maqam ${findMaqam(state.notes).name} vorgeschlagen, bitte anhören und anpassen`);
 });
 
 document.addEventListener('keydown', (e) => {

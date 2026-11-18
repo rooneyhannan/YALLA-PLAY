@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import {
   appSongIds,
   CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
-  findKey, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
+  findKey, findMaqam, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
   transposeChord, withAttacks,
 } from '../transcribe.js';
 
@@ -212,6 +212,31 @@ test('chords are suggested from the melody, as the app would choose them', () =>
   for (const c of chords) assert.equal(c.d % 16, 0);
   // Back to back, covering the song.
   for (let i = 1; i < chords.length; i++) assert.equal(chords[i].t, chords[i - 1].t + chords[i - 1].d);
+});
+
+test('the maqam is found from the melody and its final note', () => {
+  assert.deepEqual(findMaqam(truth), { tonic: 2, maqam: 'nahawand', name: 'D Nahawand' });
+  // A melody from MIDI pitches on the G string, a beat each, the last one long.
+  const melody = (pitches) => pitches.map((p, i) => ({ t: 4 * i, s: 3, f: p - 55, d: i === pitches.length - 1 ? 8 : 4 }));
+  const D = 62;
+  const cases = [
+    // Hijaz on D: E flat and F sharp.
+    [[D, D + 1, D + 4, D + 5, D + 7, D + 5, D + 4, D + 1, D + 4, D + 1, D], 'D Hijaz'],
+    // Kurd on D: E flat and F.
+    [[D, D + 1, D + 3, D + 5, D + 7, D + 5, D + 3, D + 1, D + 3, D + 1, D], 'D Kurd'],
+    // The same notes as Bb Ajam and G Nahawand; the melody rests on D.
+    [[D, D + 3, D + 1, D, D + 5, D + 3, D + 1, D], 'D Kurd'],
+    // C Ajam, ending on C.
+    [[60, 62, 64, 65, 67, 69, 71, 72, 67, 64, 62, 60], 'C Ajam'],
+    // A Nahawand with its raised seventh going up to A.
+    [[57, 59, 60, 62, 64, 65, 68, 69, 64, 60, 59, 57], 'A Nahawand'],
+  ];
+  for (const [pitches, name] of cases) assert.equal(findMaqam(melody(pitches)).name, name, name);
+  // Hijaz gets its own chords: D major on the tonic, E flat above it.
+  const hijaz = melody([D, D + 1, D + 4, D + 5, D + 7, D + 8, D + 10, D + 7, D + 5, D + 4, D + 1, D + 1, D + 3, D + 1, D + 4, D]);
+  const names = new Set(suggestChords(hijaz).map((c) => c.name));
+  assert.ok(names.has('D') && !names.has('Dm'), [...names].join(' '));
+  for (const n of names) assert.ok(['D', 'Eb', 'Gm', 'Cm'].includes(n), n);
 });
 
 test('chords go into the song file and come back', () => {

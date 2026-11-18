@@ -15,6 +15,11 @@ Open <https://rooneyhannan.github.io/YALLA-PLAY/studio/> in a desktop browser:
 2. Correct the tab: click a note to edit it, drag it along, drag the yellow handles at its ends to make it longer or shorter (chords too, by beats), double-click a string to add
    one; the waveform above shows where the recording plays. Play back the recording,
    the notes or both.
+   A song that comes in without chords gets them at once from its maqam: the
+   melody's scale and final note give Ajam, Nahawand, Kurd or Hijaz on a tonic
+   (shown next to **Akkorde vorschlagen**), and each bar the maqam's triad that
+   holds most of it. Maqamat with quarter tones sound on frets like their nearest
+   relative (Rast like Ajam, Bayati like Kurd) and are found as that.
 3. **JSON speichern**: a `yalla-song/1` file (see `docs/song-format.md`) for
    `assets/songs/`.
 
