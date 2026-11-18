@@ -95495,7 +95495,7 @@ A.aum.prototype={
 $0(){return this.a.d=0},
 $S:0}
 A.auu.prototype={
-$0(){return A.IL(this.a,"\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a \u0648\u0627\u0644\u0625\u0646\u062c\u0627\u0632\u0627\u062a \u0633\u062a\u062a\u0648\u0641\u0631 \u0642\u0631\u064a\u0628\u0627\u064b. \u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u0623\u063a\u0627\u0646\u064a \u0648\u0627\u0628\u062f\u0623 \u0627\u0644\u0639\u0632\u0641 \u0627\u0644\u0622\u0646.\n\n\u0627\u0644\u0625\u0635\u062f\u0627\u0631 2026-11-18.1126","\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a")},
+$0(){return A.IL(this.a,"\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a \u0648\u0627\u0644\u0625\u0646\u062c\u0627\u0632\u0627\u062a \u0633\u062a\u062a\u0648\u0641\u0631 \u0642\u0631\u064a\u0628\u0627\u064b. \u0627\u0633\u062a\u0643\u0634\u0641 \u0627\u0644\u0623\u063a\u0627\u0646\u064a \u0648\u0627\u0628\u062f\u0623 \u0627\u0644\u0639\u0632\u0641 \u0627\u0644\u0622\u0646.\n\n\u0627\u0644\u0625\u0635\u062f\u0627\u0631 2026-11-18.1233","\u0645\u0644\u0641\u0643 \u0627\u0644\u0634\u062e\u0635\u064a")},
 $S:0}
 A.Ad.prototype={
 ar(){return new A.Z7()},
@@ -100594,11 +100594,16 @@ B.uF=s(["CN","T2","T3","T4","T5","T6","T7"],t.s)
 B.uG=s(["dum.","lun.","mar.","mie.","joi","vin.","s\xe2m."],t.s)
 B.X1=s(["\u1325\u12cb\u1275","\u12a8\u1230\u12d3\u1275"],t.s)
 B.X3=s(["\u0442\u04a3","\u0442\u043a"],t.s)
+B.ez=s(["S","M","D","M","D","F","S"],t.s)
+B.JA=new A.Jw(2,"outer")
+B.pu=new A.p(0.09803921568627451,0,0,0,B.e)
+B.Kn=new A.bs(0.2,B.JA,B.pu,B.f,11)
+B.X5=s([B.Kn],t.E)
 B.abx=new A.df("badak","\u0628\u0639\u062f\u0643 \u0639\u0644\u0649 \u0628\u0627\u0644\u064a","\u0641\u064a\u0631\u0648\u0632","\u0637\u0631\u0628","s1_2.png","\u0645\u0628\u062a\u062f\u0626",!1,"badak",null)
 B.abo=new A.df("enta-omri","\u0625\u0646\u062a \u0639\u0645\u0631\u064a","\u0623\u0645 \u0643\u0644\u062b\u0648\u0645","\u0637\u0631\u0628","s2_1.png","\u0645\u0628\u062a\u062f\u0626",!0,null,null)
-B.abu=new A.df("lamma-bada","\u0644\u0645\u0627 \u0628\u062f\u0627 \u064a\u062a\u062b\u0646\u0649","\u0645\u0648\u0634\u062d \u062a\u0631\u0627\u062b\u064a","\u0643\u0644\u0627\u0633\u064a\u0643\u064a","s2_2.png","\u0645\u062a\u0648\u0633\u0637",!0,null,null)
+B.abv=new A.df("lamma-bada","\u0644\u0645\u0627 \u0628\u062f\u0627 \u064a\u062a\u062b\u0646\u0649","\u0645\u0648\u0634\u062d \u062a\u0631\u0627\u062b\u064a","\u0643\u0644\u0627\u0633\u064a\u0643\u064a","s2_2.png","\u0645\u062a\u0648\u0633\u0637",!0,"lamma-bada",null)
 B.abz=new A.df("ahwak","\u0623\u0647\u0648\u0627\u0643","\u0639\u0628\u062f \u0627\u0644\u062d\u0644\u064a\u0645 \u062d\u0627\u0641\u0638","\u0637\u0631\u0628","s2_3.png","\u0645\u0628\u062a\u062f\u0626",!0,null,null)
-B.abv=new A.df("zourouni","\u0632\u0648\u0631\u0648\u0646\u064a \u0643\u0644 \u0633\u0646\u0629 \u0645\u0631\u0629","\u0633\u064a\u062f \u062f\u0631\u0648\u064a\u0634","\u0643\u0644\u0627\u0633\u064a\u0643\u064a","s2_4.png","\u0645\u062a\u0642\u062f\u0645",!0,null,null)
+B.abu=new A.df("zourouni","\u0632\u0648\u0631\u0648\u0646\u064a \u0643\u0644 \u0633\u0646\u0629 \u0645\u0631\u0629","\u0633\u064a\u062f \u062f\u0631\u0648\u064a\u0634","\u0643\u0644\u0627\u0633\u064a\u0643\u064a","s2_4.png","\u0645\u062a\u0642\u062f\u0645",!0,null,null)
 B.abn=new A.df("tamally","\u062a\u0645\u0644\u064a \u0645\u0639\u0627\u0643","\u0639\u0645\u0631\u0648 \u062f\u064a\u0627\u0628","\u0628\u0648\u0628","s2_1.png","\u0645\u062a\u0648\u0633\u0637",!1,null,null)
 B.abr=new A.df("nassam","\u0646\u0633\u0645 \u0639\u0644\u064a\u0646\u0627 \u0627\u0644\u0647\u0648\u0649","\u0641\u064a\u0631\u0648\u0632","\u0637\u0631\u0628","s1_5.png","\u0645\u0628\u062a\u062f\u0626",!1,null,null)
 B.abm=new A.df("kadim","\u0632\u064a\u062f\u064a\u0646\u064a \u0639\u0634\u0642\u0627\u064b","\u0643\u0627\u0638\u0645 \u0627\u0644\u0633\u0627\u0647\u0631","\u0637\u0631\u0628","s2_0.png","\u0645\u062a\u0642\u062f\u0645",!1,null,null)
@@ -100610,12 +100615,7 @@ B.abl=new A.df("ana-lahabibi","\u0623\u0646\u0627 \u0644\u062d\u0628\u064a\u0628
 B.aby=new A.df("sana-helwa","\u0633\u0646\u0629 \u062d\u0644\u0648\u0629 \u064a\u0627 \u062c\u0645\u064a\u0644","\u0645\u062d\u0645\u062f \u0641\u0648\u0632\u064a","\u0643\u0644\u0627\u0633\u064a\u0643\u064a","s2_7.png","\u0645\u0628\u062a\u062f\u0626",!1,null,null)
 B.abw=new A.df("rayah","\u064a\u0627 \u0631\u0627\u064a\u062d","\u0631\u0634\u064a\u062f \u0637\u0647","\u0631\u0627\u064a","s1_5.png","\u0645\u0628\u062a\u062f\u0626",!0,null,null)
 B.abt=new A.df("ya-msafer","\u064a\u0627 \u0645\u0633\u0627\u0641\u0631 \u0648\u062d\u062f\u0643","\u0645\u062d\u0645\u062f \u0639\u0628\u062f \u0627\u0644\u0648\u0647\u0627\u0628","\u0637\u0631\u0628","s2_3.png","\u0645\u0628\u062a\u062f\u0626",!1,null,null)
-B.bz=s([B.abx,B.abo,B.abu,B.abz,B.abv,B.abn,B.abr,B.abm,B.abA,B.abs,B.abp,B.abq,B.abl,B.aby,B.abw,B.abt],t.GR)
-B.ez=s(["S","M","D","M","D","F","S"],t.s)
-B.JA=new A.Jw(2,"outer")
-B.pu=new A.p(0.09803921568627451,0,0,0,B.e)
-B.Kn=new A.bs(0.2,B.JA,B.pu,B.f,11)
-B.X5=s([B.Kn],t.E)
+B.bz=s([B.abx,B.abo,B.abv,B.abz,B.abu,B.abn,B.abr,B.abm,B.abA,B.abs,B.abp,B.abq,B.abl,B.aby,B.abw,B.abt],t.GR)
 B.X6=s(["\u1015\u1011\u1019 \u101e\u102f\u1036\u1038\u101c\u1015\u1010\u103a","\u1012\u102f\u1010\u102d\u101a \u101e\u102f\u1036\u1038\u101c\u1015\u1010\u103a","\u1010\u1010\u102d\u101a \u101e\u102f\u1036\u1038\u101c\u1015\u1010\u103a","\u1005\u1010\u102f\u1010\u1039\u1011 \u101e\u102f\u1036\u1038\u101c\u1015\u1010\u103a"],t.s)
 B.uH=s(["\u10d8\u10d0\u10dc","\u10d7\u10d4\u10d1","\u10db\u10d0\u10e0","\u10d0\u10de\u10e0","\u10db\u10d0\u10d8","\u10d8\u10d5\u10dc","\u10d8\u10d5\u10da","\u10d0\u10d2\u10d5","\u10e1\u10d4\u10e5","\u10dd\u10e5\u10e2","\u10dc\u10dd\u10d4","\u10d3\u10d4\u10d9"],t.s)
 B.ji=s(["januar","februar","mars","april","mai","juni","juli","august","september","oktober","november","desember"],t.s)
@@ -103268,7 +103268,7 @@ B.aho=new A.bF("\u0627\u0628\u062f\u0623 \u0627\u0644\u0627\u0633\u062a\u0645\u0
 B.ahq=new A.bF("\u062d\u0630\u0641 \u0627\u0644\u0623\u063a\u0646\u064a\u0629\u061f",null,null,null,null,null,null,null,null)
 B.acW=new A.j(!0,B.pS,null,null,null,null,12,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 B.aji=new A.b4("tuner-footer",t.O)
-B.ahr=new A.bF("E \xb7 A \xb7 D \xb7 G \xb7 H \xb7 E   \xb7   v2026-11-18.1126",null,B.acW,null,B.h,null,null,null,B.aji)
+B.ahr=new A.bF("E \xb7 A \xb7 D \xb7 G \xb7 H \xb7 E   \xb7   v2026-11-18.1233",null,B.acW,null,B.h,null,null,null,B.aji)
 B.ahs=new A.bF("\u0627\u0644\u0639\u0632\u0641",null,null,null,null,null,null,null,null)
 B.aht=new A.bF("\u0645\u0631\u0629 \u0623\u062e\u0631\u0649",null,null,null,null,null,null,null,null)
 B.ahu=new A.bF("\u062d\u0633\u0646\u0627\u064b",null,null,null,null,null,null,null,null)
