@@ -1,17 +1,23 @@
 import 'song_data.dart';
 
+/// What one shift costs: more than all other preferences of a song.
+const _shiftCost = 1e6;
+
 /// Which finger of the fretting hand plays each note: 1 index … 4 pinky,
 /// 0 for an open string.
 ///
 /// Tabs only say string and fret, so the fingers follow the "one finger
 /// per fret" rule: the hand sits in a position with the index at fret p
-/// and fingers 1–4 over frets p to p+3. The positions are chosen for the
-/// fewest and most natural shifts over the whole song, lower positions
-/// first. A natural shift moves the hand with the melody and about as far
-/// as it does (ideally one finger slides along), never against it or far
-/// for a small step (pinky on fret 5, then index on fret 6), and not
-/// straight after another shift. An open string in between frees the hand,
-/// so shifting there is cheaper.
+/// and fingers 1–4 over frets p to p+3. Rooney's rules, in this order:
+/// 1. As few shifts (position changes) as possible.
+/// 2. A shift never goes against the fingers: moving up the neck the next
+///    finger is never a lower one (not 3 on fret 5, then 2 on fret 8),
+///    moving down never a higher one (not 1, then 3). So the hand moves
+///    with the melody and never further than it does. This one is never
+///    broken; a shift that keeps it is always possible.
+/// 3. Ideally the same finger slides along (hand and melody move alike).
+/// After that: not straight after another shift, a shift over an open
+/// string (the hand is free there), short moves, lower positions.
 ///
 /// Yalla Studio uses the same rule (`assignFingers` in studio/transcribe.js).
 List<int> assignFingers(List<Note> notes) {
@@ -29,17 +35,13 @@ List<int> assignFingers(List<Note> notes) {
     double shift(int q, int p, int from, int to, bool free, bool shifted) {
       if (p == q) return 0;
       final hand = p - q, step = to - from;
-      // Finger change = how much further the hand moves than the melody.
+      // Rule 2: with the melody and never further than it.
+      if (step.sign != hand.sign || hand.abs() > step.abs()) return inf;
+      // Rule 1 outweighs everything else; then rule 3 (how much the finger
+      // changes) and the gentler preferences.
       final fingerChange = (step - hand).abs();
-      final against = step == 0 || step.sign != hand.sign;
-      final cost =
-          1 +
-          .05 * hand.abs() +
-          .4 * fingerChange +
-          (fingerChange > 1 ? fingerChange - 1 : 0) +
-          (against ? 1.5 : 0) +
-          (shifted ? .8 : 0);
-      return free ? cost / 2 : cost;
+      final detail = .05 * hand.abs() + fingerChange + (shifted ? .8 : 0);
+      return _shiftCost + (free ? detail / 2 : detail);
     }
 
     // States 2p (hand in position p) and 2p + 1 (just shifted there);
