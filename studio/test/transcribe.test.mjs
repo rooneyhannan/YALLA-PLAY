@@ -193,8 +193,8 @@ function checkShifts(frets, fingers, label = '') {
   return { shifts: slides.length, pinky: slides.filter((f) => f === 4).length, slides };
 }
 
-/** What the shifts weigh: a pinky shift counts one and a half. */
-const weight = ({ shifts, pinky }) => shifts + pinky / 2;
+/** What the shifts weigh: a pinky shift counts two and a half. */
+const weight = ({ shifts, pinky }) => shifts + 1.5 * pinky;
 
 /** The least weight of shifts that keeps the rule, worked out on its own. */
 function fewestShifts(frets) {
@@ -210,7 +210,7 @@ function fewestShifts(frets) {
       for (let k = 1; k <= 4; k++) {
         const p = fretted[i] - k + 1;
         if (p < 1 || (p !== q && k !== last)) continue;
-        const c = n + (p === q ? 0 : k === 4 ? 1.5 : 1);
+        const c = n + (p === q ? 0 : k === 4 ? 2.5 : 1);
         const to = `${p},${k}`;
         if (!next.has(to) || c < next.get(to)) next.set(to, c);
       }
@@ -239,14 +239,16 @@ test('fingers: every shift with the same finger, index first', () => {
   assert.deepEqual(assignFingers([1, 2, 4, 5]), [1, 1, 3, 4]);
 });
 
-test('fingers: the pinky slides only where it saves a shift', () => {
+test('fingers: the pinky slides only where it saves two shifts', () => {
   // Frets 1–5: the index slides once (1 → 2), not the pinky (4 → 5).
   const up = [1, 2, 3, 4, 5];
   assert.deepEqual(assignFingers(up), [1, 1, 2, 3, 4]);
   assert.deepEqual(checkShifts(up, assignFingers(up)).slides, [1]);
-  // 1, 2, 4, then a jump to 8: the pinky slides 4 → 8 in one shift; any
-  // other finger needs two.
-  assert.deepEqual(assignFingers([1, 2, 4, 8]), [1, 2, 4, 4]);
+  // 1, 2, 4, then a jump to 8: two index shifts rather than one pinky shift.
+  assert.deepEqual(assignFingers([1, 2, 4, 8]), [1, 1, 3, 3]);
+  // Up to 4, a jump to 8 and back to 5: the pinky slides 4 → 8, as every
+  // other way needs three shifts.
+  assert.deepEqual(assignFingers([1, 1, 1, 4, 8, 5]), [1, 1, 1, 4, 4, 1]);
   // A long run up a string: one index shift per step, never the pinky.
   const run = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const got = checkShifts(run, assignFingers(run));
@@ -257,9 +259,14 @@ test('fingers: the pinky slides only where it saves a shift', () => {
 test('fingers: the songs keep the rules with the fewest shifts and no pinky shift', () => {
   for (const id of ['badak', 'lamma-bada']) {
     const frets = read(`../../assets/songs/${id}.json`).notes.sort((a, b) => a.t - b.t).map((n) => n.f);
-    const got = checkShifts(frets, assignFingers(frets), id);
+    const fingers = assignFingers(frets);
+    const got = checkShifts(frets, fingers, id);
     assert.equal(weight(got), fewestShifts(frets), id);
     assert.equal(got.pinky, 0, id);
+    // Slides, not jumps: the hand moves one fret, with the index.
+    const hand = handOf(frets, fingers);
+    for (let k = 1; k < hand.length; k++) assert.ok(Math.abs(hand[k].p - hand[k - 1].p) <= 1, `${id} note ${hand[k].i}`);
+    assert.ok(got.slides.every((f) => f === 1), id);
   }
 });
 
@@ -288,12 +295,15 @@ test('fingers: random tunes keep the rules with the fewest shifts', () => {
 });
 
 test('tab and fingers: a note moves to another string when that saves a shift', () => {
-  // G4 on the 1st string, 3rd fret, among notes high on the 2nd string:
-  // played on the 2nd string, 8th fret, the hand stays in place.
-  const notes = [{ s: 2, f: 9 }, { s: 2, f: 10 }, { s: 1, f: 3 }, { s: 2, f: 9 }, { s: 2, f: 10 }];
+  // G4 on the 1st string, 3rd fret, between C5 and D5 high on the 1st
+  // string: played on the 2nd string, 8th fret, the hand stays in place.
+  const notes = [{ s: 1, f: 8 }, { s: 1, f: 10 }, { s: 1, f: 3 }, { s: 1, f: 8 }];
   const tab = fingerTab(notes);
-  assert.deepEqual(tab.map((n) => [n.s, n.f, n.finger]), [[2, 9, 3], [2, 10, 4], [2, 8, 2], [2, 9, 3], [2, 10, 4]]);
+  assert.deepEqual(tab.map((n) => [n.s, n.f, n.finger]), [[1, 8, 2], [1, 10, 4], [2, 8, 2], [1, 8, 2]]);
   assert.equal(checkShifts(tab.map((n) => n.f), tab.map((n) => n.finger)).shifts, 0);
+  // Notes struck together keep their strings.
+  const chord = fingerTab([{ t: 0, s: 1, f: 3 }, { t: 0, s: 2, f: 8 }, { t: 4, s: 1, f: 8 }]);
+  assert.deepEqual(chord.slice(0, 2).map((n) => [n.s, n.f]), [[1, 3], [2, 8]]);
   // Nothing to gain: every note keeps its string.
   const easy = [{ s: 1, f: 1 }, { s: 1, f: 3 }, { s: 2, f: 1 }, { s: 1, f: 0 }];
   assert.deepEqual(fingerTab(easy).map((n) => [n.s, n.f, n.finger]), [[1, 1, 1], [1, 3, 3], [2, 1, 1], [1, 0, 0]]);
@@ -321,8 +331,10 @@ test('tab and fingers: the songs are tabbed so that no string change saves a shi
 
 test('the recording becomes notes whose shifts keep the rules', () => {
   const notes = chartNotes(detected, detectTempo(melodyOf(detected)));
-  const got = checkShifts(notes.map((n) => n.f), notes.map((n) => n.finger));
+  const frets = notes.map((n) => n.f);
+  const got = checkShifts(frets, notes.map((n) => n.finger));
   assert.equal(got.pinky, 0);
+  assert.equal(weight(got), fewestShifts(frets));
 });
 
 test('the JSON file is what the app reads, and reads back', () => {

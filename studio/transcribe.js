@@ -415,13 +415,19 @@ export function assignTab(midis) {
 
 /** What one shift costs: more than every other preference of a song together. */
 const SHIFT_COST = 1e6;
-/** A shift with the pinky counts as one and a half shifts: it is only taken
- * where every other way needs at least two shifts instead. */
-const PINKY_SHIFT_COST = 1.5e6;
-/** Moving a note to another string: only to save a shift or a pinky shift. */
-const RETAB_COST = 1e3;
+/** A shift with the pinky counts as two and a half shifts: it is only taken
+ * where every other way needs at least three shifts instead. */
+const PINKY_SHIFT_COST = 2.5e6;
 /** Which finger slides at a shift, after the count: 1, else 3, else 2. */
-const SLIDE_COST = [0, 0, 2, 1];
+const SLIDE_COST = [0, 0, 60, 30];
+/** Per fret the hand moves at a shift: short slides, not jumps. */
+const FRET_COST = 10;
+/** A shift straight after another one. */
+const AGAIN_COST = 5;
+/** Moving a note to another string, so that the tab changes only for a reason. */
+const RETAB_COST = 0.1;
+/** Per note and fret of the hand's position: lower positions. */
+const POSITION_COST = 0.05;
 
 /**
  * One finger per fret, as in the app: the hand sits with the index at fret
@@ -432,8 +438,9 @@ const SLIDE_COST = [0, 0, 2, 1];
  * 2. As few shifts as possible.
  * 3. The sliding finger is the index (1), else the ring finger (3), else the
  *    middle finger (2). The pinky (4) only when nothing else works: a pinky
- *    shift counts as one and a half shifts.
- * After that: not straight after another shift, short moves, lower positions.
+ *    shift counts as two and a half shifts.
+ * After that: short slides rather than jumps, not straight after another
+ * shift, lower positions; a note changes its string only for one of these.
  * Notes on open strings leave the hand where it is.
  *
  * [options] holds, for every note, the {s, f, cost} it can be played with;
@@ -458,14 +465,14 @@ function fingerPath(options) {
         for (let k = 1; k <= 4; k++) {
           const p = o.f - k + 1;
           if (p < 1) break;
-          const own = c + o.cost + p * 0.001;
+          const own = c + o.cost + p * POSITION_COST;
           const to = (p * 5 + k) * 2;
           if (key < 0) { put(to, own, { key, j, finger: k }); continue; }
           const q = Math.floor(key / 10), last = Math.floor(key / 2) % 5, shifted = key % 2;
           if (p === q) { put(to, own, { key, j, finger: k }); continue; }
           // Rule 1: the same finger slides along.
           if (k !== last) continue;
-          const shift = (k === 4 ? PINKY_SHIFT_COST : SHIFT_COST + SLIDE_COST[k]) + 0.05 * Math.abs(p - q) + (shifted ? 0.8 : 0);
+          const shift = (k === 4 ? PINKY_SHIFT_COST : SHIFT_COST + SLIDE_COST[k]) + FRET_COST * Math.abs(p - q) + (shifted ? AGAIN_COST : 0);
           put(to + 1, own + shift, { key, j, finger: k });
         }
       });
@@ -496,12 +503,16 @@ export function assignFingers(frets) {
 /**
  * String, fret and finger for every note {s, f}: as assignFingers, but a note
  * may move to another string with the same pitch when that saves a shift or
- * a pinky shift (G: 1st string 3rd fret or 2nd string 8th fret). Otherwise
- * every note keeps its string.
+ * a pinky shift or makes the shifts shorter (G: 1st string 3rd fret or 2nd
+ * string 8th fret). Notes with a tick {t} struck together keep their strings.
  */
 export function fingerTab(notes) {
-  return fingerPath(notes.map((n) => {
+  // Notes struck together (a chord in the tune) keep their strings.
+  const together = new Set();
+  notes.forEach((n, i) => { if (n.t != null && notes.some((m, j) => j !== i && m.t === n.t)) together.add(i); });
+  return fingerPath(notes.map((n, i) => {
     const own = [{ s: n.s, f: n.f, cost: 0 }];
+    if (together.has(i)) return own;
     for (const o of positions(midiOf(n.s, n.f))) if (o.s !== n.s) own.push({ ...o, cost: RETAB_COST });
     return own;
   }));

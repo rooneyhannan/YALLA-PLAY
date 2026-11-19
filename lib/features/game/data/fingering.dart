@@ -3,12 +3,21 @@ import 'song_data.dart';
 /// What one shift costs: more than all other preferences of a song.
 const _shiftCost = 1e6;
 
-/// A shift with the pinky counts as one and a half shifts: it is only taken
-/// where every other way needs at least two shifts instead.
-const _pinkyShiftCost = 1.5e6;
+/// A shift with the pinky counts as two and a half shifts: it is only taken
+/// where every other way needs at least three shifts instead.
+const _pinkyShiftCost = 2.5e6;
 
 /// Which finger slides at a shift, after the count: 1, else 3, else 2.
-const _slideCost = [0.0, 0.0, 2.0, 1.0];
+const _slideCost = [0.0, 0.0, 60.0, 30.0];
+
+/// Per fret the hand moves at a shift: short slides, not jumps.
+const _fretCost = 10.0;
+
+/// A shift straight after another one.
+const _againCost = 5.0;
+
+/// Per note and fret of the hand's position: lower positions.
+const _positionCost = .05;
 
 /// Which finger of the fretting hand plays each note: 1 index … 4 pinky,
 /// 0 for an open string.
@@ -22,9 +31,9 @@ const _slideCost = [0.0, 0.0, 2.0, 1.0];
 /// 2. As few shifts as possible.
 /// 3. The sliding finger is the index (1), else the ring finger (3), else
 ///    the middle finger (2). The pinky (4) only when nothing else works: a
-///    pinky shift counts as one and a half shifts.
-/// After that: not straight after another shift, short moves, lower
-/// positions. Notes on open strings leave the hand where it is.
+///    pinky shift counts as two and a half shifts.
+/// After that: short slides rather than jumps, not straight after another
+/// shift, lower positions. Notes on open strings leave the hand where it is.
 ///
 /// The tab stays as it is. Yalla Studio uses the same rule
 /// (`assignFingers` in studio/transcribe.js); its `fingerTab` also moves
@@ -54,7 +63,7 @@ List<int> assignFingers(List<Note> notes) {
       for (var k = 1; k <= 4; k++) {
         final p = note.f - k + 1;
         if (p < 1) break;
-        final own = c + p * .001;
+        final own = c + p * _positionCost;
         final to = (p * 5 + k) * 2;
         if (key < 0) {
           put(to, own, key, k);
@@ -69,8 +78,8 @@ List<int> assignFingers(List<Note> notes) {
         if (k != last) continue;
         final shift =
             (k == 4 ? _pinkyShiftCost : _shiftCost + _slideCost[k]) +
-            .05 * (p - q).abs() +
-            (shifted ? .8 : 0);
+            _fretCost * (p - q).abs() +
+            (shifted ? _againCost : 0);
         put(to + 1, own + shift, key, k);
       }
     }

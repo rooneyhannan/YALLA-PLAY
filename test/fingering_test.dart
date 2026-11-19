@@ -54,10 +54,13 @@ void main() {
     expect(assignFingers(_notes([1, 2, 3, 4, 5])), [1, 1, 2, 3, 4]);
   });
 
-  test('the pinky slides only where it saves a shift', () {
-    // 1, 2, 4, then a jump to 8: the pinky slides 4 → 8 in one shift; any
-    // other finger needs two.
-    expect(assignFingers(_notes([1, 2, 4, 8])), [1, 2, 4, 4]);
+  test('the pinky slides only where it saves two shifts', () {
+    // 1, 2, 4, then a jump to 8: two index shifts rather than one pinky
+    // shift.
+    expect(assignFingers(_notes([1, 2, 4, 8])), [1, 1, 3, 3]);
+    // Up to 4, a jump to 8 and back to 5: the pinky slides 4 → 8, as every
+    // other way needs three shifts.
+    expect(assignFingers(_notes([1, 1, 1, 4, 8, 5])), [1, 1, 1, 4, 4, 1]);
     final run = [for (var f = 1; f <= 10; f++) f];
     final got = _checkShifts(run);
     expect(got.pinky, 0);
@@ -73,6 +76,9 @@ void main() {
       final got = _checkShifts(frets, id);
       expect(got.weight, _fewestShifts(frets));
       expect(got.pinky, 0);
+      // Slides, not jumps: the hand moves one fret, with the index.
+      expect(got.moves.every((m) => m.abs() == 1), isTrue);
+      expect(got.slides.every((f) => f == 1), isTrue);
     });
   }
 
@@ -99,13 +105,13 @@ void main() {
 List<Note> _notes(List<int> frets) => [for (final f in frets) Note(1, f, 1)];
 
 /// Checks Rooney's rule between every two fretted notes: every shift with
-/// the same finger. Returns which finger slid at each shift.
-({List<int> slides, int pinky, double weight}) _checkShifts(
+/// the same finger. Returns which finger slid at each shift and how far.
+({List<int> slides, List<int> moves, int pinky, double weight}) _checkShifts(
   List<int> frets, [
   String label = '',
 ]) {
   final fingers = assignFingers(_notes(frets));
-  final slides = <int>[];
+  final slides = <int>[], moves = <int>[];
   int? last;
   for (var i = 0; i < frets.length; i++) {
     if (frets[i] == 0) {
@@ -118,16 +124,22 @@ List<Note> _notes(List<int> frets) => [for (final f in frets) Note(1, f, 1)];
       if (move != 0) {
         expect(fingers[i], fingers[last], reason: '$label note $i');
         slides.add(fingers[i]);
+        moves.add(move);
       }
     }
     last = i;
   }
   final pinky = slides.where((f) => f == 4).length;
-  return (slides: slides, pinky: pinky, weight: slides.length + pinky / 2);
+  return (
+    slides: slides,
+    moves: moves,
+    pinky: pinky,
+    weight: slides.length + 1.5 * pinky,
+  );
 }
 
 /// The least weight of shifts that keeps the rule, worked out on its own:
-/// a pinky shift weighs one and a half.
+/// a pinky shift weighs two and a half.
 double _fewestShifts(List<int> frets) {
   final fretted = frets.where((f) => f > 0).toList();
   if (fretted.isEmpty) return 0;
@@ -142,7 +154,7 @@ double _fewestShifts(List<int> frets) {
       for (var k = 1; k <= 4; k++) {
         final p = fretted[i] - k + 1;
         if (p < 1 || (p != q && k != last)) continue;
-        final c = n + (p == q ? 0 : (k == 4 ? 1.5 : 1));
+        final c = n + (p == q ? 0 : (k == 4 ? 2.5 : 1));
         if (c < (next[(p, k)] ?? double.infinity)) next[(p, k)] = c;
       }
     }

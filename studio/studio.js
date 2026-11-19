@@ -1030,11 +1030,9 @@ $('refinger-tab').addEventListener('click', () => {
     const tab = fingerTab(state.notes);
     state.notes.forEach((n, i) => {
       if (n.s !== tab[i].s) moved++;
-      Object.assign(n, { s: tab[i].s, f: tab[i].f, finger: tab[i].finger, fingerAuto: true });
+      Object.assign(n, { s: tab[i].s, f: tab[i].f, fingerAuto: true });
     });
   });
-  inspect();
-  draw();
   setStatus(moved ? `${moved} Noten auf eine andere Saite gelegt, Finger neu gewählt` : 'Finger neu gewählt, keine Saite geändert');
 });
 
