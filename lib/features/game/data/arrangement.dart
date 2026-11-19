@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'backing_style.dart';
 import 'chord_symbol.dart';
 import 'synth.dart';
 
@@ -64,6 +65,7 @@ class Arrangement {
     double barTicks = 16,
     double ticksPerSecond = 6,
     List<ChordSpan>? chords,
+    BackingStyle style = const BackingStyle(),
   }) {
     final halfBar = barTicks / 2;
     final askedBefore = _askedBefore * ticksPerSecond;
@@ -136,15 +138,66 @@ class Arrangement {
       0,
       ((last - firstBeat) / barTicks - 1e-6).floor(),
     );
-    // Two guitars at once in every bar: one strums, the other picks the
-    // chord note by note. The last bar rings out on one strummed chord.
-    final strumGap = .016 * ticksPerSecond;
+    // Two guitars at once in every bar, unless the song wants only one:
+    // one strums, the other picks the chord note by note. The last bar
+    // rings out on one strummed chord.
+    final strums = style.guitar != BackingGuitar.arpeggio;
+    final picks =
+        style.guitar == BackingGuitar.both ||
+        style.guitar == BackingGuitar.arpeggio;
+    final guitars = style.guitar != BackingGuitar.off;
+    // The rhythm the strumming guitar and the darbuka follow, a letter a
+    // step: D doum, T tek, k ka.
+    final rhythm = BackingStyle.pattern(style.rhythm, stepsPerBar);
+    final strumGap = .012 * ticksPerSecond;
     // Played by hand: every stroke a touch behind the grid, never ahead of
     // it so nothing sounds before its chord, and a little louder or softer
     // than the one before. Seeded, so a song always sounds the same.
     final hand = math.Random(7);
     double late() => hand.nextDouble() * .015 * ticksPerSecond;
     double touch() => .88 + .24 * hand.nextDouble();
+
+    // Where the backing next falls silent after a tick: at the first gap
+    // between the song's chords, or at the end.
+    double silentAfter(double t) {
+      var until = spanAt(t)?.end ?? t;
+      for (final c in spans) {
+        if (c.start <= until + 1e-6 && c.start + c.length > until) {
+          until = c.start + c.length;
+        }
+      }
+      return given ? until : math.max(until, last);
+    }
+
+    // The darbuka plays the rhythm with the chords, resting where the song
+    // has none, and closes on one doum.
+    if (style.darbuka) {
+      final drummer = math.Random(11);
+      for (var i = 0; ; i++) {
+        final t = firstBeat + i * step;
+        if (t >= last - 1e-6) break;
+        if (spanAt(t) == null) continue;
+        final ring = math.min(.5 * ticksPerSecond, silentAfter(t) - t);
+        final bar = i ~/ stepsPerBar, inBar = i % stepsPerBar;
+        final stroke = bar == lastBar
+            ? (inBar == 0 ? 'D' : '.')
+            : rhythm[inBar];
+        final at = t + drummer.nextDouble() * .01 * ticksPerSecond;
+        final feel = .9 + .2 * drummer.nextDouble();
+        // Nothing rings into a rest of the song.
+        final length = ring - (at - t);
+        if (length <= 1e-6) continue;
+        switch (stroke) {
+          case 'D':
+            final gain = (inBar == 0 ? .5 : .42) * feel;
+            events.add(SoundEvent(at, Voice.doum, 0, length, gain));
+          case 'T':
+            events.add(SoundEvent(at, Voice.tek, 0, length, .3 * feel));
+          case 'k':
+            events.add(SoundEvent(at, Voice.ka, 0, length, .14 * feel));
+        }
+      }
+    }
 
     for (var i = 0; ; i++) {
       final t = firstBeat + i * step;
@@ -153,7 +206,9 @@ class Arrangement {
       if (span == null) continue;
       final chord = span.chord;
       final bar = i ~/ stepsPerBar, inBar = i % stepsPerBar;
-      if (bar == lastBar) {
+      if (!guitars) {
+        // Only the bass below.
+      } else if (bar == lastBar) {
         if (inBar == 0) {
           final length = math.min(span.end, firstBeat + (bar + 1) * barTicks);
           _strum(
@@ -163,22 +218,18 @@ class Arrangement {
             length - t,
             asked(t, length),
             down: true,
-            gain: .11,
+            gain: .14,
             gap: strumGap,
           );
         }
       } else {
-        // The strumming guitar: down on the beats, up on the off-beats,
-        // D, D U, U D U in 4/4, no stroke after the one and on the three.
-        bool rests(int k) =>
-            subdivide && (k == 1 || (stepsPerBar == 8 && k == 4));
-        final down = inBar.isEven;
-        if (!rests(inBar)) {
-          var next = inBar + 1;
-          while (next < stepsPerBar && rests(next)) {
-            next++;
-          }
-          final length = math.min((next - inBar) * step, span.end - t);
+        // The strumming guitar: a stroke on every step, full and strong on
+        // the doums, firm on the teks, light in between; down on the
+        // beats, up on the off-beats, a doum always down.
+        if (strums) {
+          final stroke = rhythm[inBar];
+          final down = stroke == 'D' || inBar.isEven;
+          final length = math.min(step, span.end - t);
           final at = t + late();
           _strum(
             events,
@@ -187,7 +238,13 @@ class Arrangement {
             length - (at - t),
             asked(t, t + length),
             down: down,
-            gain: (inBar == 0 ? .1 : (down ? .08 : .055)) * touch(),
+            gain:
+                (switch (stroke) {
+                  'D' => inBar == 0 ? .16 : .145,
+                  'T' => .12,
+                  _ => .07,
+                }) *
+                touch(),
             gap: strumGap,
           );
         }
@@ -195,25 +252,28 @@ class Arrangement {
         // fingers up and down, p i m a m i, over all five strings in a bar
         // of eight, letting each note ring under the next. The fingers play
         // an octave above the strumming guitar, so the two do not blur.
-        final pattern = stepsPerBar == 8
-            ? const [0, 1, 2, 3, 4, 3, 2, 1]
-            : const [0, 1, 2, 3, 2, 1];
-        final voicing = _guitarVoicing(chord);
-        final string = pattern[inBar % pattern.length] % voicing.length;
-        final midi = voicing[string] + (string == 0 ? 0 : 12);
-        final length = math.min(2 * step, span.end - t);
-        final at = t + late();
-        if (length - (at - t) > 1e-6 &&
-            !asked(t, t + length).contains(midi % 12)) {
-          events.add(
-            SoundEvent(
-              at,
-              Voice.picked,
-              _midiFrequency(midi),
-              length - (at - t),
-              (inBar == 0 ? .12 : .095) * touch(),
-            ),
-          );
+        if (picks) {
+          final pattern = stepsPerBar == 8
+              ? const [0, 1, 2, 3, 4, 3, 2, 1]
+              : const [0, 1, 2, 3, 2, 1];
+          final voicing = _guitarVoicing(chord);
+          final string = pattern[inBar % pattern.length] % voicing.length;
+          // Alone, the fingers stay in the strumming guitar's register.
+          final midi = voicing[string] + (strums && string != 0 ? 12 : 0);
+          final length = math.min(2 * step, span.end - t);
+          final at = t + late();
+          if (length - (at - t) > 1e-6 &&
+              !asked(t, t + length).contains(midi % 12)) {
+            events.add(
+              SoundEvent(
+                at,
+                Voice.picked,
+                _midiFrequency(midi),
+                length - (at - t),
+                (inBar == 0 ? .13 : .1) * touch(),
+              ),
+            );
+          }
         }
       }
       // The bass: the chord's bass note on the first beat, its fifth
@@ -238,7 +298,7 @@ class Arrangement {
           // Between E2 and D#3, below the guitar's melody.
           final midi = 40 + (pc - 40) % 12;
           events.add(
-            SoundEvent(t, Voice.bass, _midiFrequency(midi), length, .3),
+            SoundEvent(t, Voice.bass, _midiFrequency(midi), length, .34),
           );
         }
       }
@@ -333,8 +393,9 @@ class Arrangement {
   }
 
   /// The chord as a guitar holds it, lowest string first: its root between
-  /// C3 and B3, then its tones upwards, five strings up to G4.
-  static List<int> _guitarVoicing(ChordSymbol chord) {
+  /// C3 and B3, then its tones upwards, five strings up to G4, or up to
+  /// [top] when given.
+  static List<int> _guitarVoicing(ChordSymbol chord, {int top = 67}) {
     final voicing = [48 + (chord.bassNote - 48) % 12];
     final order = [for (final i in chord.intervals) (chord.root + i) % 12];
     for (var k = 0; voicing.length < 5 && k < 24; k++) {
@@ -344,14 +405,32 @@ class Arrangement {
       while (midi % 12 != pc) {
         midi++;
       }
-      if (midi > 67) break;
+      if (midi > top) break;
       voicing.add(midi);
     }
     return voicing;
   }
 
+  /// The chord as the strumming guitar holds it, on all six strings: five
+  /// as in [_guitarVoicing], reaching up to B4 so that no chord is left
+  /// with fewer, and below them the chord's fifth or root, from E2 up, for
+  /// a full, deep stroke.
+  static List<int> _strumVoicing(ChordSymbol chord) {
+    final upper = _guitarVoicing(chord, top: 71);
+    final fifthAt = math.min(2, chord.intervals.length - 1);
+    final fifth = (chord.root + chord.intervals[fifthAt]) % 12;
+    for (final pc in [fifth, chord.bassNote]) {
+      var midi = upper.first - 1;
+      while (midi % 12 != pc) {
+        midi--;
+      }
+      if (midi >= 40) return [midi, ...upper];
+    }
+    return upper;
+  }
+
   /// One stroke of the strumming guitar: down from the lowest string to
-  /// the highest, or up over the top three, a few milliseconds apart. A
+  /// the highest, or up over the top four, a few milliseconds apart. A
   /// tone the player is asked for is left out; nothing foreign takes its
   /// place.
   static void _strum(
@@ -365,10 +444,10 @@ class Arrangement {
     required double gap,
   }) {
     if (length <= 1e-6) return;
-    final all = _guitarVoicing(chord);
+    final all = _strumVoicing(chord);
     final strings = down
         ? all
-        : all.sublist(math.max(0, all.length - 3)).reversed.toList();
+        : all.sublist(math.max(0, all.length - 4)).reversed.toList();
     var k = 0;
     for (final midi in strings) {
       if (avoid.contains(midi % 12)) continue;

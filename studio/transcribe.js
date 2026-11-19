@@ -726,8 +726,31 @@ export function suggestChords(notes, { ticksPerBeat = 4, beatsPerBar = 4 } = {})
   return chords;
 }
 
+/** How the app's backing can play a song, the `backing` object of a
+ * `yalla-song/1` file: which guitars, which Arabic rhythm the strumming and
+ * the darbuka follow, and whether the darbuka plays. The first of each is
+ * the default. */
+export const BACKING_GUITARS = {
+  both: 'Strumming + Arpeggio', strum: 'Nur Strumming', arpeggio: 'Nur Arpeggio', off: 'Keine Gitarren',
+};
+export const BACKING_RHYTHMS = {
+  auto: 'Passend zum Takt (4/4 Maqsum, 10/8 Sama’i)', maqsum: 'Maqsum', baladi: 'Baladi', saidi: 'Saidi', wahda: 'Wahda', samai: 'Sama’i (10/8)',
+};
+export const DEFAULT_BACKING = Object.freeze({ guitar: 'both', rhythm: 'auto', darbuka: true });
+
+/** A song's backing with every field filled in; throws on an unknown one. */
+export function backingOf(raw) {
+  if (raw == null) return { ...DEFAULT_BACKING };
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Ungültige Begleitung: ' + JSON.stringify(raw));
+  const backing = { ...DEFAULT_BACKING, ...raw };
+  if (!(backing.guitar in BACKING_GUITARS) || !(backing.rhythm in BACKING_RHYTHMS) || typeof backing.darbuka !== 'boolean') {
+    throw new Error('Ungültige Begleitung: ' + JSON.stringify(raw));
+  }
+  return { guitar: backing.guitar, rhythm: backing.rhythm, darbuka: backing.darbuka };
+}
+
 /** A chart in the app's `yalla-song/1` format, one note per line. */
-export function toJson(meta, notes, chords = []) {
+export function toJson(meta, notes, chords = [], backing = null) {
   const head = {
     format: 'yalla-song/1',
     id: meta.id,
@@ -741,7 +764,9 @@ export function toJson(meta, notes, chords = []) {
   const lines = [...notes]
     .sort((a, b) => a.t - b.t)
     .map((n) => '    ' + JSON.stringify({ t: n.t, s: n.s, f: n.f, d: n.d, ...(n.finger == null ? {} : { finger: n.finger }) }).replaceAll(',', ', ').replaceAll(':', ': '));
-  const top = JSON.stringify(head, null, 2);
+  // The backing on one line, as the song files have it.
+  const top = JSON.stringify(head, null, 2).slice(0, -2) +
+    (backing ? ',\n  "backing": ' + JSON.stringify(backingOf(backing)).replaceAll(',', ', ').replaceAll('":', '": ') : '') + '\n}';
   const chordLines = [...chords]
     .sort((a, b) => a.t - b.t)
     .map((c) => '    ' + JSON.stringify({ t: c.t, d: c.d, name: c.name }).replaceAll(',', ', ').replaceAll('":', '": '));
@@ -762,6 +787,7 @@ export function fromJson(text) {
   for (const c of data.chords ?? []) {
     if (!parseChord(c.name) || !(c.d >= 1 && c.t >= 0)) throw new Error('Ungültiger Akkord: ' + JSON.stringify(c));
   }
+  backingOf(data.backing);
   return data;
 }
 

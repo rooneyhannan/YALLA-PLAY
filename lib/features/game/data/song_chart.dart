@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+import 'backing_style.dart';
 import 'chord_symbol.dart';
 import 'song_data.dart';
 
@@ -42,6 +43,9 @@ class SongChart {
   /// backing to the app.
   final List<ChartChord> chords;
 
+  /// How the backing plays: guitars, rhythm and darbuka.
+  final BackingStyle backing;
+
   const SongChart({
     required this.id,
     required this.title,
@@ -51,6 +55,7 @@ class SongChart {
     this.chords = const [],
     this.ticksPerBeat = 4,
     this.beatsPerBar = 4,
+    this.backing = const BackingStyle(),
   });
 
   /// Song ticks per second at normal speed.
@@ -111,6 +116,7 @@ class SongChart {
       beatsPerBar: field<int>(json, 'beatsPerBar', 4),
       notes: notes,
       chords: chords,
+      backing: BackingStyle.fromJson(json['backing']),
     );
   }
 

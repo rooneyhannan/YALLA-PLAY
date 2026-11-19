@@ -6,6 +6,7 @@
   "bpm": 96,
   "ticksPerBeat": 2,
   "beatsPerBar": 10,
+  "backing": {"guitar": "both", "rhythm": "samai", "darbuka": true},
   "notes": [
     {"t": 0, "s": 1, "f": 3, "d": 4},
     {"t": 4, "s": 1, "f": 5, "d": 1},

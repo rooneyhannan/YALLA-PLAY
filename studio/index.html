@@ -103,7 +103,7 @@
     <label>Datei-ID <input id="song-id" autocomplete="off" pattern="[a-z0-9-]+"></label>
     <label>Tempo (BPM) <input id="bpm" type="number" min="30" max="260" step="0.1"></label>
     <label>Takt
-      <select id="beats-per-bar"><option>2</option><option>3</option><option selected>4</option><option>6</option></select>
+      <select id="beats-per-bar"><option>2</option><option>3</option><option selected>4</option><option>6</option><option>10</option></select>
       <span class="unit">/4</span></label>
     <div class="meta-buttons">
       <button id="requantize" class="button small" title="Die erkannten Noten mit dem eingetragenen Tempo neu ins Raster setzen">Raster neu berechnen</button>
@@ -112,6 +112,14 @@
       <button id="suggest-chords" class="button small" title="Akkorde für die Begleitung aus dem Maqam der Melodie vorschlagen">Akkorde vorschlagen</button>
       <span id="maqam" class="hint" title="Aus der Melodie erkannt: Ajam, Nahawand, Kurd oder Hijaz. Maqamat mit Vierteltönen (Rast, Bayati, Saba) klingen auf Bünden wie ihr nächster Verwandter (Rast wie Ajam, Bayati wie Kurd oder Nahawand)."></span>
     </div>
+  </section>
+
+  <section class="backing" id="backing" title="So begleitet die App den Song. Wird mit dem Song gespeichert.">
+    <strong class="section-title">🥁 Begleitung in der App</strong>
+    <label>Gitarren <select id="backing-guitar"></select></label>
+    <label>Rhythmus <select id="backing-rhythm"></select></label>
+    <label class="inline"><input type="checkbox" id="backing-darbuka"> Darbuka</label>
+    <p class="hint">Die Strumming-Gitarre und die Darbuka spielen den Rhythmus: Doum kräftig, Tek fest, dazwischen leise Schläge.</p>
   </section>
 
   <section class="arrange" id="arrange">

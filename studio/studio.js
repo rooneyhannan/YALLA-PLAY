@@ -1,7 +1,7 @@
 // Yalla Studio: open a recording, let Basic Pitch find its notes, turn them
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
-  CHORD_QUALITIES, ROOT_NAMES, appSongIds, assignFingers, chartNotes, chordName, chordTones, detectTempo, findMaqam, fromJson,
+  BACKING_GUITARS, BACKING_RHYTHMS, CHORD_QUALITIES, DEFAULT_BACKING, ROOT_NAMES, appSongIds, backingOf, assignFingers, chartNotes, chordName, chordTones, detectTempo, findMaqam, fromJson,
   hz, midiOf, noteName, onsetEnergy, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord, withAttacks,
 } from './transcribe.js';
 import { gp5 } from './guitarpro.js';
@@ -18,6 +18,8 @@ const state = {
   notes: [],
   /** The backing's chords: {t, d, name}. */
   chords: [],
+  /** How the app's backing plays: {guitar, rhythm, darbuka}. */
+  backing: { ...DEFAULT_BACKING },
   selectedChord: -1,
   /** What Basic Pitch heard, kept to fit the grid again with a new tempo. */
   detected: null,
@@ -105,6 +107,7 @@ async function openAudio(file, { asked = false } = {}) {
     state.offset = tempo.offset;
     setNotes(chartNotes(detected, { ...tempo, ticksPerBeat: 4, ...state.arrange }).map((n) => ({ ...n, fingerAuto: true })));
     state.chords = [];
+    state.backing = { ...DEFAULT_BACKING };
     const maqam = autoChords();
     undo.length = redo.length = 0;
     state.edited = false;
@@ -139,6 +142,7 @@ function loadSong(data, origin = null) {
   };
   setNotes(data.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger ?? null, fingerAuto: n.finger == null })));
   state.chords = (data.chords ?? []).map((c) => ({ t: c.t, d: c.d, name: c.name })).sort((a, b) => a.t - b.t);
+  state.backing = backingOf(data.backing);
   const given = state.chords.length;
   const maqam = autoChords();
   state.detected = null;
@@ -476,6 +480,7 @@ async function openGp(file) {
   state.meta = song.meta;
   setNotes(song.notes.map((n) => ({ ...n, fingerAuto: n.finger == null })));
   state.chords = song.chords;
+  state.backing = { ...DEFAULT_BACKING };
   const given = state.chords.length;
   const maqam = autoChords();
   state.detected = null;
@@ -619,6 +624,7 @@ function exportJson() {
     { ...state.meta, maqam: state.notes.length ? findMaqam(state.notes, state.meta).name : undefined },
     state.notes.map((n) => ({ t: n.t, s: n.s, f: n.f, d: n.d, finger: n.finger })),
     state.chords,
+    state.backing,
   );
 }
 window.yallaStudio = { state, exportJson, exportGp5 }; // for automated tests
@@ -708,6 +714,25 @@ function writeMeta() {
   $('beats-per-bar').value = state.meta.beatsPerBar;
   $('requantize').disabled = !state.detected;
   writeArrange();
+  writeBacking();
+}
+
+// How the app accompanies the song: saved in its file, played by the app.
+for (const [value, label] of Object.entries(BACKING_GUITARS)) $('backing-guitar').append(new Option(label, value));
+for (const [value, label] of Object.entries(BACKING_RHYTHMS)) $('backing-rhythm').append(new Option(label, value));
+function writeBacking() {
+  $('backing-guitar').value = state.backing.guitar;
+  $('backing-rhythm').value = state.backing.rhythm;
+  $('backing-darbuka').checked = state.backing.darbuka;
+}
+for (const id of ['backing-guitar', 'backing-rhythm', 'backing-darbuka']) {
+  $(id).addEventListener('change', () => {
+    state.backing = {
+      guitar: $('backing-guitar').value, rhythm: $('backing-rhythm').value, darbuka: $('backing-darbuka').checked,
+    };
+    state.edited = true;
+    setStatus('Begleitung geändert · „In die App“ oder JSON speichern, dann spielt die App sie so');
+  });
 }
 function writeArrange() {
   $('bpm').value = state.meta.bpm;
