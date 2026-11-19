@@ -1,7 +1,7 @@
 // Yalla Studio: open a recording, let Basic Pitch find its notes, turn them
 // into a guitar tab, correct it by hand and save it as a yalla-song/1 file.
 import {
-  BACKING_GUITARS, BACKING_RHYTHMS, CHORD_QUALITIES, DEFAULT_BACKING, ROOT_NAMES, appSongIds, backingOf, assignFingers, chartNotes, chordName, chordTones, detectTempo, findMaqam, fromJson,
+  BACKING_GUITARS, BACKING_RHYTHMS, CHORD_QUALITIES, DEFAULT_BACKING, ROOT_NAMES, appSongIds, backingOf, assignFingers, chartNotes, fingerTab, chordName, chordTones, detectTempo, findMaqam, fromJson,
   hz, midiOf, noteName, onsetEnergy, parseChord, pickMelody, positions, slug, suggestChords, toJson, transposeChord, withAttacks,
 } from './transcribe.js';
 import { gp5 } from './guitarpro.js';
@@ -1020,6 +1020,23 @@ function addChord(tick) {
   inspect();
   draw();
 }
+
+// Strings and fingers chosen anew by Rooney's shift rules; hand-set fingers
+// go back to automatic.
+$('refinger-tab').addEventListener('click', () => {
+  if (!state.notes.length) return;
+  let moved = 0;
+  change(() => {
+    const tab = fingerTab(state.notes);
+    state.notes.forEach((n, i) => {
+      if (n.s !== tab[i].s) moved++;
+      Object.assign(n, { s: tab[i].s, f: tab[i].f, finger: tab[i].finger, fingerAuto: true });
+    });
+  });
+  inspect();
+  draw();
+  setStatus(moved ? `${moved} Noten auf eine andere Saite gelegt, Finger neu gewählt` : 'Finger neu gewählt, keine Saite geändert');
+});
 
 $('suggest-chords').addEventListener('click', () => {
   if (!state.notes.length) return;

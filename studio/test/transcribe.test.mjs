@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
   appSongIds, backingOf,
-  CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
+  CHORD_QUALITIES, assignFingers, assignTab, fingerTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
   findKey, findMaqam, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
   transposeChord, withAttacks,
 } from '../transcribe.js';
@@ -173,40 +173,46 @@ test('fingers: one finger per fret, shifting only when needed', () => {
 /** Hand positions (index finger's fret) of the fretted notes, in order. */
 const handOf = (frets, fingers) => frets.flatMap((f, i) => (f ? [{ i, f, p: f - fingers[i] + 1 }] : []));
 
-/** Rooney's rule 2, checked between every two fretted notes; returns the shifts. */
+/**
+ * Rooney's rule, checked between every two fretted notes: every shift with
+ * the same finger. Returns the shifts and which finger slid at each.
+ */
 function checkShifts(frets, fingers, label = '') {
-  let shifts = 0;
+  const slides = [];
   const hand = handOf(frets, fingers);
-  for (let k = 1; k < hand.length; k++) {
-    const a = hand[k - 1], b = hand[k];
-    const move = b.p - a.p, step = b.f - a.f;
+  frets.forEach((f, i) => { if (!f) assert.equal(fingers[i], 0, `${label} note ${i}: open string`); });
+  for (let k = 0; k < hand.length; k++) {
+    const b = hand[k];
     assert.ok(fingers[b.i] >= 1 && fingers[b.i] <= 4, `${label} note ${b.i}: finger ${fingers[b.i]}`);
-    if (!move) continue;
-    shifts++;
-    const where = `${label} note ${b.i}: fret ${a.f} finger ${fingers[a.i]} → fret ${b.f} finger ${fingers[b.i]}`;
-    // Up the neck never to a lower finger, down never to a higher one.
-    if (step > 0) assert.ok(move > 0 && fingers[b.i] >= fingers[a.i], where);
-    else assert.ok(step < 0 && move < 0 && fingers[b.i] <= fingers[a.i], where);
+    if (!k || b.p === hand[k - 1].p) continue;
+    const a = hand[k - 1];
+    assert.equal(fingers[b.i], fingers[a.i],
+      `${label} note ${b.i}: fret ${a.f} finger ${fingers[a.i]} → fret ${b.f} finger ${fingers[b.i]}`);
+    slides.push(fingers[b.i]);
   }
-  return shifts;
+  return { shifts: slides.length, pinky: slides.filter((f) => f === 4).length, slides };
 }
 
-/** The fewest shifts that keep rule 2, worked out on its own (no preferences). */
+/** What the shifts weigh: a pinky shift counts one and a half. */
+const weight = ({ shifts, pinky }) => shifts + pinky / 2;
+
+/** The least weight of shifts that keeps the rule, worked out on its own. */
 function fewestShifts(frets) {
   const fretted = frets.filter((f) => f > 0);
   if (!fretted.length) return 0;
-  const fits = (p, f) => f >= p && f <= p + 3;
+  // Hand position and finger of the last note → least weight.
   let best = new Map();
-  for (let p = 1; p <= 21; p++) if (fits(p, fretted[0])) best.set(p, 0);
-  for (let k = 1; k < fretted.length; k++) {
-    const step = fretted[k] - fretted[k - 1], next = new Map();
-    for (const [q, n] of best) {
-      for (let p = 1; p <= 21; p++) {
-        if (!fits(p, fretted[k])) continue;
-        const move = p - q;
-        if (move && (Math.sign(move) !== Math.sign(step) || Math.abs(move) > Math.abs(step))) continue;
-        const c = n + (move ? 1 : 0);
-        if (!next.has(p) || c < next.get(p)) next.set(p, c);
+  for (let k = 1; k <= 4; k++) if (fretted[0] - k + 1 >= 1) best.set(`${fretted[0] - k + 1},${k}`, 0);
+  for (let i = 1; i < fretted.length; i++) {
+    const next = new Map();
+    for (const [key, n] of best) {
+      const [q, last] = key.split(',').map(Number);
+      for (let k = 1; k <= 4; k++) {
+        const p = fretted[i] - k + 1;
+        if (p < 1 || (p !== q && k !== last)) continue;
+        const c = n + (p === q ? 0 : k === 4 ? 1.5 : 1);
+        const to = `${p},${k}`;
+        if (!next.has(to) || c < next.get(to)) next.set(to, c);
       }
     }
     best = next;
@@ -214,32 +220,54 @@ function fewestShifts(frets) {
   return Math.min(...best.values());
 }
 
-test('fingers: Rooney\'s rules for shifts', () => {
-  // Fret 5 to 8 with a shift: finger 3 then 2 would go against the hand.
-  // Here the hand moves with the melody and the same finger slides along.
+test('fingers: every shift with the same finger, index first', () => {
+  // Up from fret 3 to 5: the index slides along, not 1 → 3.
   const lamma = [3, 5, 6, 8, 6, 6, 5, 5, 3, 3, 2, 3];
-  assert.deepEqual(assignFingers(lamma), [1, 1, 2, 4, 4, 4, 4, 4, 2, 2, 1, 2]);
-  assert.equal(checkShifts(lamma, assignFingers(lamma)), fewestShifts(lamma));
-  // Down from fret 8 (pinky) to 3: the next finger is never a higher one,
-  // and changes as little as it can (pinky → ring, not → index).
-  assert.deepEqual(assignFingers([5, 6, 7, 8, 3]), [1, 2, 3, 4, 3]);
-  // Up fret by fret: the fingers never go back down (no pinky 4 → index 5).
+  assert.deepEqual(assignFingers(lamma), [1, 1, 2, 4, 2, 2, 1, 1, 1, 1, 1, 2]);
+  assert.deepEqual(checkShifts(lamma, assignFingers(lamma)).slides, [1, 1, 1]);
+  // Down from fret 8 to 3: the pinky cannot slide there, so the index
+  // slides 5 → 6 and the ring finger 8 → 3.
+  assert.deepEqual(assignFingers([5, 6, 7, 8, 3]), [1, 1, 2, 3, 3]);
+  // Up fret by fret: the index slides, never the pinky.
   const run = [1, 2, 3, 4, 5, 6];
-  assert.deepEqual(assignFingers(run), [1, 2, 3, 3, 4, 4]);
-  assert.equal(checkShifts(run, assignFingers(run)), fewestShifts(run));
+  assert.deepEqual(assignFingers(run), [1, 1, 1, 2, 3, 4]);
+  assert.equal(checkShifts(run, assignFingers(run)).pinky, 0);
+  // Fret 1–3, then 5–6: the index could only slide with a second shift,
+  // the ring finger slides with one (3 → 5).
+  assert.deepEqual(assignFingers([1, 2, 3, 5, 6]), [1, 2, 3, 3, 4]);
+  // Index rather than pinky: 1 and 2 with the index, then 4 and 5.
+  assert.deepEqual(assignFingers([1, 2, 4, 5]), [1, 1, 3, 4]);
 });
 
-test('fingers: the songs keep the rules with the fewest shifts', () => {
+test('fingers: the pinky slides only where it saves a shift', () => {
+  // Frets 1–5: the index slides once (1 → 2), not the pinky (4 → 5).
+  const up = [1, 2, 3, 4, 5];
+  assert.deepEqual(assignFingers(up), [1, 1, 2, 3, 4]);
+  assert.deepEqual(checkShifts(up, assignFingers(up)).slides, [1]);
+  // 1, 2, 4, then a jump to 8: the pinky slides 4 → 8 in one shift; any
+  // other finger needs two.
+  assert.deepEqual(assignFingers([1, 2, 4, 8]), [1, 2, 4, 4]);
+  // A long run up a string: one index shift per step, never the pinky.
+  const run = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const got = checkShifts(run, assignFingers(run));
+  assert.equal(got.pinky, 0);
+  assert.equal(weight(got), fewestShifts(run));
+});
+
+test('fingers: the songs keep the rules with the fewest shifts and no pinky shift', () => {
   for (const id of ['badak', 'lamma-bada']) {
-    const frets = read(`../../assets/songs/${id}.json`).notes.map((n) => n.f);
-    assert.equal(checkShifts(frets, assignFingers(frets), id), fewestShifts(frets), id);
+    const frets = read(`../../assets/songs/${id}.json`).notes.sort((a, b) => a.t - b.t).map((n) => n.f);
+    const got = checkShifts(frets, assignFingers(frets), id);
+    assert.equal(weight(got), fewestShifts(frets), id);
+    assert.equal(got.pinky, 0, id);
   }
 });
 
-test('fingers: random tunes keep the rules with the fewest shifts', () => {
+const randomTunes = (count) => {
   let seed = 7;
   const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  for (let n = 0; n < 300; n++) {
+  const tunes = [];
+  for (let n = 0; n < count; n++) {
     let f = 1 + Math.floor(random() * 12);
     const frets = [];
     const length = 4 + Math.floor(random() * 30);
@@ -248,8 +276,53 @@ test('fingers: random tunes keep the rules with the fewest shifts', () => {
       f = Math.min(20, Math.max(1, f + Math.round((random() - 0.5) * 10)));
       frets.push(f);
     }
-    assert.equal(checkShifts(frets, assignFingers(frets), frets.join(',')), fewestShifts(frets), frets.join(','));
+    tunes.push(frets);
   }
+  return tunes;
+};
+
+test('fingers: random tunes keep the rules with the fewest shifts', () => {
+  for (const frets of randomTunes(300)) {
+    assert.equal(weight(checkShifts(frets, assignFingers(frets), frets.join(','))), fewestShifts(frets), frets.join(','));
+  }
+});
+
+test('tab and fingers: a note moves to another string when that saves a shift', () => {
+  // G4 on the 1st string, 3rd fret, among notes high on the 2nd string:
+  // played on the 2nd string, 8th fret, the hand stays in place.
+  const notes = [{ s: 2, f: 9 }, { s: 2, f: 10 }, { s: 1, f: 3 }, { s: 2, f: 9 }, { s: 2, f: 10 }];
+  const tab = fingerTab(notes);
+  assert.deepEqual(tab.map((n) => [n.s, n.f, n.finger]), [[2, 9, 3], [2, 10, 4], [2, 8, 2], [2, 9, 3], [2, 10, 4]]);
+  assert.equal(checkShifts(tab.map((n) => n.f), tab.map((n) => n.finger)).shifts, 0);
+  // Nothing to gain: every note keeps its string.
+  const easy = [{ s: 1, f: 1 }, { s: 1, f: 3 }, { s: 2, f: 1 }, { s: 1, f: 0 }];
+  assert.deepEqual(fingerTab(easy).map((n) => [n.s, n.f, n.finger]), [[1, 1, 1], [1, 3, 3], [2, 1, 1], [1, 0, 0]]);
+});
+
+test('tab and fingers: same pitches, the rules kept, never more shifts than the tab alone', () => {
+  for (const frets of randomTunes(150)) {
+    const notes = frets.map((f) => ({ s: 1, f: Math.min(f, 15) }));
+    const tab = fingerTab(notes);
+    tab.forEach((n, i) => assert.equal(midiOf(n.s, n.f), midiOf(notes[i].s, notes[i].f)));
+    const got = checkShifts(tab.map((n) => n.f), tab.map((n) => n.finger), frets.join(','));
+    assert.ok(weight(got) <= fewestShifts(notes.map((n) => n.f)), frets.join(','));
+    assert.equal(weight(got), fewestShifts(tab.map((n) => n.f)), frets.join(','));
+  }
+});
+
+test('tab and fingers: the songs are tabbed so that no string change saves a shift', () => {
+  for (const id of ['badak', 'lamma-bada']) {
+    const notes = read(`../../assets/songs/${id}.json`).notes.sort((a, b) => a.t - b.t);
+    const tab = fingerTab(notes);
+    assert.deepEqual(tab.map((n) => [n.s, n.f]), notes.map((n) => [n.s, n.f]), id);
+    assert.deepEqual(tab.map((n) => n.finger), assignFingers(notes.map((n) => n.f)), id);
+  }
+});
+
+test('the recording becomes notes whose shifts keep the rules', () => {
+  const notes = chartNotes(detected, detectTempo(melodyOf(detected)));
+  const got = checkShifts(notes.map((n) => n.f), notes.map((n) => n.finger));
+  assert.equal(got.pinky, 0);
 });
 
 test('the JSON file is what the app reads, and reads back', () => {

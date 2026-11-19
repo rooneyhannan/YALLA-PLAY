@@ -5,7 +5,8 @@ import { ascii, gp5, keySignature, tabMeasures } from '../guitarpro.js';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url)));
 const bytes = (path) => new Uint8Array(readFileSync(new URL(path, import.meta.url)));
-const badak = read('../../assets/songs/badak.json');
+// Ba’dak Ala Bali with the tab it had when the references were written.
+const badak = read('./badak_tab.json');
 const cases = read('./tab_cases.json');
 // 64ths per note value.
 const units = (b) => (64 / b.value) * (b.dotted ? 1.5 : 1);
