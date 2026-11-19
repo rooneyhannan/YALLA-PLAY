@@ -8,7 +8,10 @@ Open <https://rooneyhannan.github.io/YALLA-PLAY/studio/> in a desktop browser:
    melody, or *Ganzer Song* for a tune within accompaniment: then the Studio follows the
    main line (loud, high, small steps) through chords and bass. Basic Pitch (Spotify,
    runs in the browser) finds the notes; the Studio keeps the melody, finds the tempo,
-   puts the notes on the grid and chooses strings, frets and fingers.
+   puts the notes on the grid and chooses strings, frets and fingers: every shift with
+   the same finger (index, else ring, else middle, the pinky only as a last resort), as
+   few shifts as possible, a note moved to another string where that saves one.
+   **Saiten & Finger neu** does the same for a song that is already open.
    In the editor, **Erkennung**, **Vereinfachen** (grace notes off, or strongly: short
    notes and repeats too) and **Transponieren** (folded by octaves into the guitar)
    compute the notes anew from what was heard; Ctrl+Z undoes it.

@@ -43,7 +43,7 @@ Each note:
 | `s` | String, 1 = high E … 6 = low E, standard tuning. |
 | `f` | Fret, 0 = open string, up to 24. |
 | `d` | Length in ticks, at least 1. |
-| `finger` | Optional: 1 index … 4 pinky, 0 open string. Left out, the app picks fingers by the one-finger-per-fret rule. |
+| `finger` | Optional: 1 index … 4 pinky, 0 open string. Left out, the app picks fingers by the one-finger-per-fret rule, every shift with the same finger (see `lib/features/game/data/fingering.dart`). |
 
 The pitch follows from string and fret; the microphone listens for that pitch.
 

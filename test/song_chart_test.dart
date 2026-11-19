@@ -16,7 +16,8 @@ void main() {
     final first = demoChart.notes.first;
     expect(
       (first.tick, first.note.s, first.note.f, first.note.d),
-      (0, 2, 3, 4),
+      // D4, in the 10th position where the whole tune lies without a shift.
+      (0, 4, 12, 4),
     );
   });
 

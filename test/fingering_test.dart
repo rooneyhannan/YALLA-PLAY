@@ -39,29 +39,46 @@ void main() {
     }
   });
 
-  test('the hand never shifts against the fingers', () {
-    // The opening of Lamma Bada: fret 5 to 8 with a shift never goes
-    // finger 3 → 2; the hand moves with the melody and the same finger
-    // slides along.
+  test('every shift with the same finger, index first', () {
+    // Up from fret 3 to 5: the index slides along.
     final lamma = [3, 5, 6, 8, 6, 6, 5, 5, 3, 3, 2, 3];
-    expect(assignFingers(_notes(lamma)), [1, 1, 2, 4, 4, 4, 4, 4, 2, 2, 1, 2]);
-    expect(_checkShifts(lamma), _fewestShifts(lamma));
-    // Down from fret 8 (pinky) to 3: never a higher finger, and as little
-    // change as possible (pinky → ring).
-    expect(assignFingers(_notes([5, 6, 7, 8, 3])), [1, 2, 3, 4, 3]);
-    // Up fret by fret: the fingers never go back down (no pinky → index).
-    final run = [1, 2, 3, 4, 5, 6];
-    expect(assignFingers(_notes(run)), [1, 2, 3, 3, 4, 4]);
-    expect(_checkShifts(run), _fewestShifts(run));
+    expect(assignFingers(_notes(lamma)), [1, 1, 2, 4, 2, 2, 1, 1, 1, 1, 1, 2]);
+    expect(_checkShifts(lamma).slides, [1, 1, 1]);
+    // Down from fret 8 to 3: the pinky cannot slide there, so the index
+    // slides 5 → 6 and the ring finger 8 → 3.
+    expect(assignFingers(_notes([5, 6, 7, 8, 3])), [1, 1, 2, 3, 3]);
+    // Fret 1–3, then 5–6: the ring finger slides with one shift (3 → 5).
+    expect(assignFingers(_notes([1, 2, 3, 5, 6])), [1, 2, 3, 3, 4]);
+    // Index rather than pinky.
+    expect(assignFingers(_notes([1, 2, 4, 5])), [1, 1, 3, 4]);
+    expect(assignFingers(_notes([1, 2, 3, 4, 5])), [1, 1, 2, 3, 4]);
+  });
+
+  test('the pinky slides only where it saves two shifts', () {
+    // 1, 2, 4, then a jump to 8: two index shifts rather than one pinky
+    // shift.
+    expect(assignFingers(_notes([1, 2, 4, 8])), [1, 1, 3, 3]);
+    // Up to 4, a jump to 8 and back to 5: the pinky slides 4 → 8, as every
+    // other way needs three shifts.
+    expect(assignFingers(_notes([1, 1, 1, 4, 8, 5])), [1, 1, 1, 4, 4, 1]);
+    final run = [for (var f = 1; f <= 10; f++) f];
+    final got = _checkShifts(run);
+    expect(got.pinky, 0);
+    expect(got.weight, _fewestShifts(run));
   });
 
   for (final id in ['badak', 'lamma-bada']) {
-    test('$id: every shift keeps the rules, as few as possible', () {
+    test('$id: every shift with the same finger, as few as possible', () {
       final chart = SongChart.parse(
         File('assets/songs/$id.json').readAsStringSync(),
       );
       final frets = [for (final n in chart.notes) n.note.f];
-      expect(_checkShifts(frets, id), _fewestShifts(frets));
+      final got = _checkShifts(frets, id);
+      expect(got.weight, _fewestShifts(frets));
+      expect(got.pinky, 0);
+      // Slides, not jumps: the hand moves one fret, with the index.
+      expect(got.moves.every((m) => m.abs() == 1), isTrue);
+      expect(got.slides.every((f) => f == 1), isTrue);
     });
   }
 
@@ -80,18 +97,21 @@ void main() {
         f = math.min(20, math.max(1, f + ((random() - .5) * 10).round()));
         frets.add(f);
       }
-      expect(_checkShifts(frets, frets.join(',')), _fewestShifts(frets));
+      expect(_checkShifts(frets, frets.join(',')).weight, _fewestShifts(frets));
     }
   });
 }
 
 List<Note> _notes(List<int> frets) => [for (final f in frets) Note(1, f, 1)];
 
-/// Checks Rooney's rule between every two fretted notes: up the neck never
-/// to a lower finger, down never to a higher one. Returns the shifts.
-int _checkShifts(List<int> frets, [String label = '']) {
+/// Checks Rooney's rule between every two fretted notes: every shift with
+/// the same finger. Returns which finger slid at each shift and how far.
+({List<int> slides, List<int> moves, int pinky, double weight}) _checkShifts(
+  List<int> frets, [
+  String label = '',
+]) {
   final fingers = assignFingers(_notes(frets));
-  var shifts = 0;
+  final slides = <int>[], moves = <int>[];
   int? last;
   for (var i = 0; i < frets.length; i++) {
     if (frets[i] == 0) {
@@ -101,45 +121,44 @@ int _checkShifts(List<int> frets, [String label = '']) {
     expect(fingers[i], inInclusiveRange(1, 4), reason: '$label note $i');
     if (last != null) {
       final move = (frets[i] - fingers[i]) - (frets[last] - fingers[last]);
-      final step = frets[i] - frets[last];
       if (move != 0) {
-        shifts++;
-        final where = '$label note $i';
-        // With the melody, and the finger changes along with it: up the
-        // neck never to a lower finger, down never to a higher one.
-        expect(move.sign, step.sign, reason: where);
-        final change = fingers[i] - fingers[last];
-        expect(change * step.sign, greaterThanOrEqualTo(0), reason: where);
+        expect(fingers[i], fingers[last], reason: '$label note $i');
+        slides.add(fingers[i]);
+        moves.add(move);
       }
     }
     last = i;
   }
-  return shifts;
+  final pinky = slides.where((f) => f == 4).length;
+  return (
+    slides: slides,
+    moves: moves,
+    pinky: pinky,
+    weight: slides.length + 1.5 * pinky,
+  );
 }
 
-/// The fewest shifts that keep the rule, worked out on its own.
-int _fewestShifts(List<int> frets) {
+/// The least weight of shifts that keeps the rule, worked out on its own:
+/// a pinky shift weighs two and a half.
+double _fewestShifts(List<int> frets) {
   final fretted = frets.where((f) => f > 0).toList();
   if (fretted.isEmpty) return 0;
-  bool fits(int p, int f) => f >= p && f <= p + 3;
-  var best = <int, int>{};
-  for (var p = 1; p <= 21; p++) {
-    if (fits(p, fretted.first)) best[p] = 0;
-  }
-  for (var k = 1; k < fretted.length; k++) {
-    final step = fretted[k] - fretted[k - 1];
-    final next = <int, int>{};
-    for (final MapEntry(key: q, value: n) in best.entries) {
-      for (var p = 1; p <= 21; p++) {
-        if (!fits(p, fretted[k])) continue;
-        final move = p - q;
-        final against = move.sign != step.sign || move.abs() > step.abs();
-        if (move != 0 && against) continue;
-        final c = n + (move != 0 ? 1 : 0);
-        if (c < (next[p] ?? c + 1)) next[p] = c;
+  // (hand position, finger of the last note) → least weight.
+  var best = <(int, int), double>{
+    for (var k = 1; k <= 4; k++)
+      if (fretted.first - k + 1 >= 1) (fretted.first - k + 1, k): 0,
+  };
+  for (var i = 1; i < fretted.length; i++) {
+    final next = <(int, int), double>{};
+    for (final MapEntry(key: (q, last), value: n) in best.entries) {
+      for (var k = 1; k <= 4; k++) {
+        final p = fretted[i] - k + 1;
+        if (p < 1 || (p != q && k != last)) continue;
+        final c = n + (p == q ? 0 : (k == 4 ? 2.5 : 1));
+        if (c < (next[(p, k)] ?? double.infinity)) next[(p, k)] = c;
       }
     }
     best = next;
   }
-  return best.values.reduce((a, b) => a < b ? a : b);
+  return best.values.reduce(math.min);
 }

@@ -3,7 +3,7 @@
 // tuning, the bars, voices, beats, notes and rhythms, each in its own list
 // and referring to the others by id. Pure functions (the ZIP is inflated
 // with the platform's DecompressionStream), so they run under `node --test`.
-import { OPEN_STRINGS, assignTab, parseChord, slug } from './transcribe.js';
+import { OPEN_STRINGS, assignTab, fingerTab, parseChord, slug } from './transcribe.js';
 
 // ---------------------------------------------------------------- ZIP
 
@@ -244,7 +244,7 @@ export function songFromScore(score, trackIndex) {
   const standard = track.capo === 0 && track.tuning.length === 6 && track.tuning.every((p, i) => p === OPEN_STRINGS[i]);
   const placed = standard
     ? melody.map((n) => ({ s: n.string, f: n.fret }))
-    : assignTab(melody.map((n) => n.midi));
+    : fingerTab(assignTab(melody.map((n) => n.midi)).map((p, i) => ({ ...p, t: melody[i].start })));
   // Fingers the file gives stay; the Studio works out the others.
   const notes = melody.map((n, i) => ({
     t: tick(n.start), s: placed[i].s, f: placed[i].f, d: Math.max(1, tick(n.length)),

@@ -415,68 +415,107 @@ export function assignTab(midis) {
 
 /** What one shift costs: more than every other preference of a song together. */
 const SHIFT_COST = 1e6;
+/** A shift with the pinky counts as two and a half shifts: it is only taken
+ * where every other way needs at least three shifts instead. */
+const PINKY_SHIFT_COST = 2.5e6;
+/** Which finger slides at a shift, after the count: 1, else 3, else 2. */
+const SLIDE_COST = [0, 0, 60, 30];
+/** Per fret the hand moves at a shift: short slides, not jumps. */
+const FRET_COST = 10;
+/** A shift straight after another one. */
+const AGAIN_COST = 5;
+/** Moving a note to another string, so that the tab changes only for a reason. */
+const RETAB_COST = 0.1;
+/** Per note and fret of the hand's position: lower positions. */
+const POSITION_COST = 0.05;
 
 /**
  * One finger per fret, as in the app: the hand sits with the index at fret
  * p and fingers 1–4 over frets p … p+3. Rooney's rules, in this order:
- * 1. As few shifts (position changes) as possible.
- * 2. A shift never goes against the fingers: moving up the neck the next
- *    finger is never a lower one (not 3 on fret 5, then 2 on fret 8), moving
- *    down never a higher one (not 1, then 3). So the hand moves with the
- *    melody and never further than it does. This one is never broken; a
- *    shift that keeps it is always possible.
- * 3. Ideally the same finger slides along (hand and melody move alike).
- * After that: not straight after another shift, a shift over an open string
- * (the hand is free there), short moves, lower positions.
- * The app has the same rule (assignFingers in lib/features/game/data/fingering.dart).
+ * 1. Every shift (position change) is made with the same finger: the finger
+ *    that plays the note before it slides to the next note. So the hand
+ *    moves exactly as far as the melody.
+ * 2. As few shifts as possible.
+ * 3. The sliding finger is the index (1), else the ring finger (3), else the
+ *    middle finger (2). The pinky (4) only when nothing else works: a pinky
+ *    shift counts as two and a half shifts.
+ * After that: short slides rather than jumps, not straight after another
+ * shift, lower positions; a note changes its string only for one of these.
+ * Notes on open strings leave the hand where it is.
+ *
+ * [options] holds, for every note, the {s, f, cost} it can be played with;
+ * returns the chosen {s, f, finger} per note.
+ */
+function fingerPath(options) {
+  // A state is the hand's position p, the finger k of the last fretted note
+  // and whether it just shifted: key (p * 5 + k) * 2 + shifted; -1 before
+  // the first fretted note.
+  let cost = new Map([[-1, 0]]);
+  const back = [];
+  for (const choices of options) {
+    const next = new Map(), from = new Map();
+    const put = (key, c, how) => {
+      if (!(c < (next.get(key) ?? Infinity))) return;
+      next.set(key, c);
+      from.set(key, how);
+    };
+    for (const [key, c] of cost) {
+      choices.forEach((o, j) => {
+        if (o.f === 0) return put(key, c + o.cost, { key, j, finger: 0 });
+        for (let k = 1; k <= 4; k++) {
+          const p = o.f - k + 1;
+          if (p < 1) break;
+          const own = c + o.cost + p * POSITION_COST;
+          const to = (p * 5 + k) * 2;
+          if (key < 0) { put(to, own, { key, j, finger: k }); continue; }
+          const q = Math.floor(key / 10), last = Math.floor(key / 2) % 5, shifted = key % 2;
+          if (p === q) { put(to, own, { key, j, finger: k }); continue; }
+          // Rule 1: the same finger slides along.
+          if (k !== last) continue;
+          const shift = (k === 4 ? PINKY_SHIFT_COST : SHIFT_COST + SLIDE_COST[k]) + FRET_COST * Math.abs(p - q) + (shifted ? AGAIN_COST : 0);
+          put(to + 1, own + shift, { key, j, finger: k });
+        }
+      });
+    }
+    back.push(from);
+    cost = next;
+  }
+  let key = null;
+  for (const [k, c] of cost) if (key === null || c < cost.get(key)) key = k;
+  const out = new Array(options.length);
+  for (let i = options.length - 1; i >= 0; i--) {
+    const how = back[i].get(key);
+    out[i] = { s: options[i][how.j].s, f: options[i][how.j].f, finger: how.finger };
+    key = how.key;
+  }
+  return out;
+}
+
+/**
+ * The finger for every fret of a melody whose tab stays as it is, by the
+ * rules of fingerPath. The app has the same rule (assignFingers in
+ * lib/features/game/data/fingering.dart).
  */
 export function assignFingers(frets) {
-  const maxPosition = 21;
-  const fits = (p, f) => f >= p && f <= p + 3;
-  const fretted = [];
-  frets.forEach((f, i) => { if (f > 0) fretted.push(i); });
-  const positionsOut = new Array(frets.length).fill(0);
-  if (fretted.length) {
-    const shift = (q, p, from, to, free, shifted) => {
-      if (p === q) return 0;
-      const hand = p - q, step = to - from;
-      // Rule 2: with the melody and never further than it.
-      if (Math.sign(step) !== Math.sign(hand) || Math.abs(hand) > Math.abs(step)) return Infinity;
-      // Rule 1 outweighs everything else; then rule 3 (how much the finger
-      // changes) and the gentler preferences.
-      const fingerChange = Math.abs(step - hand);
-      const detail = 0.05 * Math.abs(hand) + fingerChange + (shifted ? 0.8 : 0);
-      return SHIFT_COST + (free ? detail / 2 : detail);
-    };
-    // States 2p (hand in position p) and 2p + 1 (just shifted there).
-    const states = 2 * (maxPosition + 1);
-    let cost = new Array(states).fill(Infinity);
-    for (let p = 1; p <= maxPosition; p++) if (fits(p, frets[fretted[0]])) cost[2 * p] = p * 0.001;
-    const back = [];
-    for (let k = 1; k < fretted.length; k++) {
-      const a = fretted[k - 1], b = fretted[k];
-      const free = b - a > 1;
-      const next = new Array(states).fill(Infinity), from = new Array(states).fill(0);
-      for (let p = 1; p <= maxPosition; p++) {
-        if (!fits(p, frets[b])) continue;
-        for (let s = 2; s < states; s++) {
-          if (cost[s] === Infinity) continue;
-          const q = s >> 1, to = 2 * p + (p === q ? 0 : 1);
-          const c = cost[s] + shift(q, p, frets[a], frets[b], free, s % 2 === 1) + p * 0.001;
-          if (c < next[to]) { next[to] = c; from[to] = s; }
-        }
-      }
-      back.push(from);
-      cost = next;
-    }
-    let s = 2;
-    for (let t = 2; t < states; t++) if (cost[t] < cost[s]) s = t;
-    for (let k = fretted.length - 1; k >= 0; k--) {
-      positionsOut[fretted[k]] = s >> 1;
-      if (k > 0) s = back[k - 1][s];
-    }
-  }
-  return frets.map((f, i) => (f === 0 ? 0 : f - positionsOut[i] + 1));
+  return fingerPath(frets.map((f) => [{ s: 0, f, cost: 0 }])).map((n) => n.finger);
+}
+
+/**
+ * String, fret and finger for every note {s, f}: as assignFingers, but a note
+ * may move to another string with the same pitch when that saves a shift or
+ * a pinky shift or makes the shifts shorter (G: 1st string 3rd fret or 2nd
+ * string 8th fret). Notes with a tick {t} struck together keep their strings.
+ */
+export function fingerTab(notes) {
+  // Notes struck together (a chord in the tune) keep their strings.
+  const together = new Set();
+  notes.forEach((n, i) => { if (n.t != null && notes.some((m, j) => j !== i && m.t === n.t)) together.add(i); });
+  return fingerPath(notes.map((n, i) => {
+    const own = [{ s: n.s, f: n.f, cost: 0 }];
+    if (together.has(i)) return own;
+    for (const o of positions(midiOf(n.s, n.f))) if (o.s !== n.s) own.push({ ...o, cost: RETAB_COST });
+    return own;
+  }));
 }
 
 /**
@@ -555,9 +594,8 @@ export function chartNotes(detected, { bpm, offset, ticksPerBeat = 4, mode = 'si
   const melody = pickMelody(detected, mode);
   const grid = transpose(simplify(quantize(melody, { bpm, offset, ticksPerBeat }), level, { ticksPerBeat }), shift);
   if (!grid.length) return [];
-  const tab = assignTab(grid.map((n) => n.midi));
-  const fingers = assignFingers(tab.map((p) => p.f));
-  return grid.map((n, i) => ({ t: n.tick, s: tab[i].s, f: tab[i].f, d: n.length, finger: fingers[i] }));
+  const tab = fingerTab(assignTab(grid.map((n) => n.midi)));
+  return grid.map((n, i) => ({ t: n.tick, s: tab[i].s, f: tab[i].f, d: n.length, finger: tab[i].finger }));
 }
 
 // ---------------------------------------------------------------- chords
