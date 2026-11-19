@@ -72,7 +72,7 @@ one, `k` a soft ka between them. A named rhythm that does not fit the bar
 gives way to a plain one (doum on the one, teks on the even steps). The
 strumming guitar strikes on every step, all six strings down on a doum,
 firm on a tek and light up and down in between; the darbuka plays the same
-pattern. The last bar rings out on one strummed chord and one doum. A bass
+pattern and, like the guitars, rests where the song has no chord. The last bar rings out on one strummed chord and one doum. A bass
 plays the chord's bass note on the first beat and its fifth halfway through
 the bar, strings hold the chord underneath, and a second and third voice
 sing under long melody notes.

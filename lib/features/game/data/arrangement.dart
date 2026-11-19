@@ -157,28 +157,44 @@ class Arrangement {
     double late() => hand.nextDouble() * .015 * ticksPerSecond;
     double touch() => .88 + .24 * hand.nextDouble();
 
-    // The darbuka plays the rhythm from the first beat to the end, chords
-    // or not, and closes on one doum.
+    // Where the backing next falls silent after a tick: at the first gap
+    // between the song's chords, or at the end.
+    double silentAfter(double t) {
+      var until = spanAt(t)?.end ?? t;
+      for (final c in spans) {
+        if (c.start <= until + 1e-6 && c.start + c.length > until) {
+          until = c.start + c.length;
+        }
+      }
+      return given ? until : math.max(until, last);
+    }
+
+    // The darbuka plays the rhythm with the chords, resting where the song
+    // has none, and closes on one doum.
     if (style.darbuka) {
       final drummer = math.Random(11);
-      final ring = .5 * ticksPerSecond;
       for (var i = 0; ; i++) {
         final t = firstBeat + i * step;
         if (t >= last - 1e-6) break;
+        if (spanAt(t) == null) continue;
+        final ring = math.min(.5 * ticksPerSecond, silentAfter(t) - t);
         final bar = i ~/ stepsPerBar, inBar = i % stepsPerBar;
         final stroke = bar == lastBar
             ? (inBar == 0 ? 'D' : '.')
             : rhythm[inBar];
         final at = t + drummer.nextDouble() * .01 * ticksPerSecond;
         final feel = .9 + .2 * drummer.nextDouble();
+        // Nothing rings into a rest of the song.
+        final length = ring - (at - t);
+        if (length <= 1e-6) continue;
         switch (stroke) {
           case 'D':
             final gain = (inBar == 0 ? .5 : .42) * feel;
-            events.add(SoundEvent(at, Voice.doum, 0, ring, gain));
+            events.add(SoundEvent(at, Voice.doum, 0, length, gain));
           case 'T':
-            events.add(SoundEvent(at, Voice.tek, 0, ring, .3 * feel));
+            events.add(SoundEvent(at, Voice.tek, 0, length, .3 * feel));
           case 'k':
-            events.add(SoundEvent(at, Voice.ka, 0, ring, .14 * feel));
+            events.add(SoundEvent(at, Voice.ka, 0, length, .14 * feel));
         }
       }
     }
