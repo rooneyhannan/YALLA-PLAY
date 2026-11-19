@@ -64,6 +64,14 @@ const songs = <Song>[
     chart: 'lamma-bada',
   ),
   Song(
+    id: 'bint-shalabiya',
+    title: 'البنت الشلبية',
+    artist: 'فيروز',
+    category: 'طرب',
+    image: 's1_4.png',
+    chart: 'bint-shalabiya',
+  ),
+  Song(
     id: 'ahwak',
     title: 'أهواك',
     artist: 'عبد الحليم حافظ',

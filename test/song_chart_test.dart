@@ -23,7 +23,7 @@ void main() {
 
   test('every chart in the song list is a valid file of that id', () {
     final charts = [for (final s in songs) ?s.chart];
-    expect(charts, containsAll(['badak', 'lamma-bada']));
+    expect(charts, containsAll(['badak', 'lamma-bada', 'bint-shalabiya']));
     for (final id in charts) {
       final chart = SongChart.parse(
         File('assets/songs/$id.json').readAsStringSync(),
@@ -51,6 +51,27 @@ void main() {
     ];
     expect(bar, containsAll([6, 7, 3, 2]));
     expect(bar, isNot(contains(5)));
+  });
+
+  test('Al Bint el Shalabiya: 4/4 at 150, repeats written out', () {
+    final chart = SongChart.parse(
+      File('assets/songs/bint-shalabiya.json').readAsStringSync(),
+    );
+    expect((chart.ticksPerBeat, chart.beatsPerBar, chart.bpm), (2, 4, 150));
+    expect(chart.notes, hasLength(287));
+    expect(chart.chords, isEmpty);
+    // 55 bars: the intro of six, the verse twice with its two endings, the
+    // second part, the verse again from the sign and the coda; the last
+    // note ends on the third beat of the last bar.
+    final last = chart.notes.last;
+    expect(last.tick + last.note.d, 54 * 8 + 4);
+    // C minor with B natural as its leading note, never B flat.
+    const open = [64, 59, 55, 50, 45, 40];
+    final pitches = {
+      for (final n in chart.notes) (open[n.note.s - 1] + n.note.f) % 12,
+    };
+    expect(pitches, containsAll([0, 2, 3, 5, 7, 8, 11]));
+    expect(pitches, isNot(contains(10)));
   });
 
   test('rests, fingers and other tempos come through', () {
