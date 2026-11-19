@@ -99,8 +99,14 @@ Float32List _doum(int rate) {
 
 /// The tek, and with less [brightness] and a shorter [ring] the ka: a
 /// finger snapping on the rim, a crack of noise with the ring of the
-/// drum's shell, metal or clay, at a few thousand hertz.
-Float32List _tek(int rate, {required double ring, required double brightness}) {
+/// drum's shell, metal or clay, at a few thousand hertz: each a quarter
+/// tone from any note, so that neither it nor what it takes for an
+/// overtone is heard as one.
+Float32List _tek(
+  int rate, {
+  required double ring,
+  required double brightness,
+}) {
   final out = Float32List((rate * .2).round());
   final random = math.Random(9);
   var low = 0.0;
@@ -111,8 +117,8 @@ Float32List _tek(int rate, {required double ring, required double brightness}) {
     low = .7 * low + .3 * noise;
     final crack = (noise - low) * math.exp(-t / ring);
     final shell =
-        (math.sin(2 * math.pi * 3150 * t) +
-            .6 * math.sin(2 * math.pi * 4870 * t)) *
+        (math.sin(2 * math.pi * 3233 * t) +
+            .6 * math.sin(2 * math.pi * 4845 * t)) *
         math.exp(-t / (ring * 2.2));
     out[i] =
         math.min(1.0, t / .0005) *

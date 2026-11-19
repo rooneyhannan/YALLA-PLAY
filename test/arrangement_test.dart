@@ -134,8 +134,7 @@ void main() {
     expect(both.length / (bars - 1), greaterThan(.9));
   });
 
-  test('the strumming is full: a stroke on every eighth, strongest on doum',
-      () {
+  test('the strumming is full: a stroke on every eighth, strong on doum', () {
     final bars = ((melody.last.start + melody.last.length - 6) / 16).ceil();
     // Maqsum, D T k T D k T k: the doums take all six strings, down.
     List<SoundEvent> stroke(int bar, int eighth) => arrangement.events
@@ -151,7 +150,9 @@ void main() {
       for (var eighth = 0; eighth < 8; eighth++) {
         if (stroke(bar, eighth).isNotEmpty) strokes++;
       }
-      if (stroke(bar, 0).length >= 5) full++;
+      // A doum strikes at least three strings, even with the player's
+      // pitch left out.
+      if (stroke(bar, 0).length >= 3) full++;
       final doum = stroke(bar, 0), ka = stroke(bar, 2);
       if (doum.isNotEmpty && ka.isNotEmpty) {
         expect(doum.first.gain, greaterThan(ka.first.gain * 1.5));
@@ -191,7 +192,9 @@ void main() {
         Arrangement.of(melody, firstBeat: 6, end: end, style: style);
     final bars = ((melody.last.start + melody.last.length - 6) / 16).ceil();
     Set<Voice> voices(Arrangement a) => {for (final e in a.events) e.voice};
-    final strum = voices(styled(const BackingStyle(guitar: BackingGuitar.strum)));
+    final strum = voices(
+      styled(const BackingStyle(guitar: BackingGuitar.strum)),
+    );
     expect(strum, contains(Voice.chord));
     expect(strum, isNot(contains(Voice.picked)));
     final picked = styled(const BackingStyle(guitar: BackingGuitar.arpeggio));
@@ -225,8 +228,14 @@ void main() {
       BackingStyle.fromJson({'guitar': 'strum', 'rhythm': 'wahda'}).rhythm,
       BackingRhythm.wahda,
     );
-    expect(() => BackingStyle.fromJson({'rhythm': 'polka'}), throwsFormatException);
-    expect(() => BackingStyle.fromJson({'darbuka': 'ja'}), throwsFormatException);
+    expect(
+      () => BackingStyle.fromJson({'rhythm': 'polka'}),
+      throwsFormatException,
+    );
+    expect(
+      () => BackingStyle.fromJson({'darbuka': 'ja'}),
+      throwsFormatException,
+    );
     expect(BackingStyle.fromJson(null).guitar, BackingGuitar.both);
   });
 

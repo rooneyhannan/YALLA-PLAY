@@ -173,9 +173,8 @@ class Arrangement {
         final feel = .9 + .2 * drummer.nextDouble();
         switch (stroke) {
           case 'D':
-            events.add(
-              SoundEvent(at, Voice.doum, 0, ring, (inBar == 0 ? .5 : .42) * feel),
-            );
+            final gain = (inBar == 0 ? .5 : .42) * feel;
+            events.add(SoundEvent(at, Voice.doum, 0, ring, gain));
           case 'T':
             events.add(SoundEvent(at, Voice.tek, 0, ring, .3 * feel));
           case 'k':
@@ -378,8 +377,9 @@ class Arrangement {
   }
 
   /// The chord as a guitar holds it, lowest string first: its root between
-  /// C3 and B3, then its tones upwards, five strings up to G4.
-  static List<int> _guitarVoicing(ChordSymbol chord) {
+  /// C3 and B3, then its tones upwards, five strings up to G4, or up to
+  /// [top] when given.
+  static List<int> _guitarVoicing(ChordSymbol chord, {int top = 67}) {
     final voicing = [48 + (chord.bassNote - 48) % 12];
     final order = [for (final i in chord.intervals) (chord.root + i) % 12];
     for (var k = 0; voicing.length < 5 && k < 24; k++) {
@@ -389,20 +389,20 @@ class Arrangement {
       while (midi % 12 != pc) {
         midi++;
       }
-      if (midi > 67) break;
+      if (midi > top) break;
       voicing.add(midi);
     }
     return voicing;
   }
 
-  /// The chord as the strumming guitar holds it, on all six strings: the
-  /// five of [_guitarVoicing] and, below them, the chord's fifth or root
-  /// on a low string from E2 up, for a full, deep stroke.
+  /// The chord as the strumming guitar holds it, on all six strings: five
+  /// as in [_guitarVoicing], reaching up to B4 so that no chord is left
+  /// with fewer, and below them the chord's fifth or root, from E2 up, for
+  /// a full, deep stroke.
   static List<int> _strumVoicing(ChordSymbol chord) {
-    final upper = _guitarVoicing(chord);
-    final fifth =
-        (chord.root + chord.intervals[math.min(2, chord.intervals.length - 1)]) %
-        12;
+    final upper = _guitarVoicing(chord, top: 71);
+    final fifthAt = math.min(2, chord.intervals.length - 1);
+    final fifth = (chord.root + chord.intervals[fifthAt]) % 12;
     for (final pc in [fifth, chord.bassNote]) {
       var midi = upper.first - 1;
       while (midi % 12 != pc) {
