@@ -12,6 +12,7 @@ Songs live as JSON files in `assets/songs/<id>.json`. Yalla Studio
   "bpm": 90,
   "ticksPerBeat": 4,
   "beatsPerBar": 4,
+  "backing": {"guitar": "both", "rhythm": "maqsum", "darbuka": true},
   "notes": [
     {"t": 0, "s": 2, "f": 3, "d": 4, "finger": 1}
   ],
@@ -30,6 +31,7 @@ Songs live as JSON files in `assets/songs/<id>.json`. Yalla Studio
 | `ticksPerBeat` | The smallest step of the song; 4 means sixteenth notes in 4/4. Default 4. |
 | `beatsPerBar` | Beats per bar, for bar lines and the metronome's stress. Default 4. |
 | `maqam` | Optional: the maqam Yalla Studio heard in the melody, as in `D Nahawand` (Ajam, Nahawand, Kurd or Hijaz on a tonic). For information; the app does not read it yet. |
+| `backing` | Optional: how the app accompanies the song, set in Yalla Studio under **🥁 Begleitung in der App**; see below. Left out, or any field of it, the defaults apply. |
 | `notes` | One object per note, in any order. |
 | `chords` | Optional: the backing's chords, in any order. Yalla Studio fills them in from the melody's maqam when a song comes in without any. A file without them the app still harmonizes by major or minor key. |
 
@@ -56,12 +58,24 @@ Each chord:
 The backing never plays the pitch the player is asked for at that moment, in
 any octave, so the microphone hears only the guitar for it.
 
-How the backing plays the chords: a second guitar picks them (arpeggio) for
-four bars, then strums them for four (down on the beats, up on the
-off-beats), in turns, and ends on one strummed chord. A bass plays the
-chord's bass note on the first beat and its fifth halfway through the bar,
-strings hold the chord underneath, and in the strummed bars a second and
-third voice sing a third and a fifth or sixth under long melody notes.
+The backing:
+
+| Field | Values (default first) |
+|---|---|
+| `guitar` | `both` (one guitar strums, another picks the chord note by note at the same time), `strum`, `arpeggio`, `off`. |
+| `rhythm` | `auto` (Maqsum in 4/4, Sama'i in 10/8, a plain one otherwise), `maqsum` (D T k T D k T k), `baladi` (D D k T D k T k), `saidi` (D T k D D k T k), `wahda` (D k k T k k T k), `samai` (D k k T k D D k T k, ten steps). |
+| `darbuka` | `true` or `false`: whether a darbuka plays the rhythm. |
+
+The rhythm runs on eighths in 4/4 and similar metres and on beats in long
+bars such as 10/8: `D` is the doum, the deep stroke, `T` the tek, the bright
+one, `k` a soft ka between them. A named rhythm that does not fit the bar
+gives way to a plain one (doum on the one, teks on the even steps). The
+strumming guitar strikes on every step, all six strings down on a doum,
+firm on a tek and light up and down in between; the darbuka plays the same
+pattern. The last bar rings out on one strummed chord and one doum. A bass
+plays the chord's bass note on the first beat and its fifth halfway through
+the bar, strings hold the chord underneath, and a second and third voice
+sing under long melody notes.
 
 Yalla Studio can open the app's songs (**📚 Song aus der App**) and keep a
 changed one in the browser's storage (`yalla.songEdits`); the app on that

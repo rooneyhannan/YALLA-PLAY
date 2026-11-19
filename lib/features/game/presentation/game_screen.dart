@@ -150,6 +150,7 @@ class _GameScreenState extends State<GameScreen>
               chord: c.chord,
             ),
         ],
+        style: widget.chart.backing,
       ).events,
     );
     _ticker = createTicker(_onTick)..start();
@@ -218,7 +219,10 @@ class _GameScreenState extends State<GameScreen>
     Voice.picked ||
     Voice.bass ||
     Voice.strings ||
-    Voice.harmony => _backing,
+    Voice.harmony ||
+    Voice.doum ||
+    Voice.tek ||
+    Voice.ka => _backing,
     Voice.guitar => _backing && !_listening,
   };
 

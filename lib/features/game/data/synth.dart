@@ -12,13 +12,19 @@ enum Voice {
 
   /// Backing: a second guitar strumming the chords, a third picking them
   /// at the same time, a plucked bass, strings holding the chords
-  /// underneath, and now and then a second and third voice under the
-  /// melody.
+  /// underneath, now and then a second and third voice under the melody,
+  /// and a darbuka.
   chord,
   picked,
   bass,
   strings,
   harmony,
+
+  /// A darbuka: the deep doum in the middle of the skin, the bright tek on
+  /// its rim, and the soft ka between them.
+  doum,
+  tek,
+  ka,
 }
 
 /// How long a sound of [voice] takes to fade once it is let go, in
@@ -65,7 +71,55 @@ Float32List synthesize(Voice voice, double frequency, int sampleRate) =>
       ),
       Voice.bass => _bass(frequency, sampleRate),
       Voice.strings => _strings(frequency, sampleRate),
+      Voice.doum => _doum(sampleRate),
+      Voice.tek => _tek(sampleRate, ring: .035, brightness: .55),
+      Voice.ka => _tek(sampleRate, ring: .022, brightness: .35),
     };
+
+/// The doum: the skin struck in the middle, a deep tone falling quickly
+/// from about 155 Hz as the skin settles, with the slap of the hand on
+/// top. It comes to rest a quarter tone above E2, half a semitone from
+/// any fret, so the microphone never takes it for a note.
+Float32List _doum(int rate) {
+  final out = Float32List((rate * .45).round());
+  final random = math.Random(5);
+  var phase = 0.0, slap = 0.0;
+  for (var i = 0; i < out.length; i++) {
+    final t = i / rate;
+    final hz = 84.82 + 70 * math.exp(-t / .02);
+    phase += 2 * math.pi * hz / rate;
+    final tone = math.sin(phase) * math.exp(-t / .16);
+    // The hand: a short burst of dark noise.
+    slap = .8 * slap + .2 * (random.nextDouble() * 2 - 1);
+    final hand = slap * math.exp(-t / .008);
+    out[i] = math.min(1.0, t / .002) * (tone + 1.5 * hand);
+  }
+  return _normalized(out, .8);
+}
+
+/// The tek, and with less [brightness] and a shorter [ring] the ka: a
+/// finger snapping on the rim, a crack of noise with the ring of the
+/// drum's shell, metal or clay, at a few thousand hertz.
+Float32List _tek(int rate, {required double ring, required double brightness}) {
+  final out = Float32List((rate * .2).round());
+  final random = math.Random(9);
+  var low = 0.0;
+  for (var i = 0; i < out.length; i++) {
+    final t = i / rate;
+    final noise = random.nextDouble() * 2 - 1;
+    // What the low-pass keeps is taken off: the rest is the crack.
+    low = .7 * low + .3 * noise;
+    final crack = (noise - low) * math.exp(-t / ring);
+    final shell =
+        (math.sin(2 * math.pi * 3150 * t) +
+            .6 * math.sin(2 * math.pi * 4870 * t)) *
+        math.exp(-t / (ring * 2.2));
+    out[i] =
+        math.min(1.0, t / .0005) *
+        (brightness * crack + (1 - brightness) * shell);
+  }
+  return _normalized(out, .7);
+}
 
 /// A classic metronome click: a short, bright sine burst.
 Float32List _click(double hz, double level, int rate) {

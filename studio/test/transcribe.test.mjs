@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  appSongIds,
+  appSongIds, backingOf,
   CHORD_QUALITIES, assignFingers, assignTab, chartNotes, chordName, chordTones, detectTempo, fromJson, melodyOf,
   findKey, findMaqam, melodyTrack, midiOf, onsetEnergy, parseChord, positions, quantize, simplify, slug, suggestChords, toJson, transpose,
   transposeChord, withAttacks,
@@ -255,12 +255,30 @@ test('fingers: random tunes keep the rules with the fewest shifts', () => {
 test('the JSON file is what the app reads, and reads back', () => {
   const file = readFileSync(new URL('../../assets/songs/badak.json', import.meta.url), 'utf8');
   const text = toJson({ id: 'badak', title: 'Ba’dak Ala Bali', artist: 'فيروز', bpm: 90 },
-    truth.map(({ t, s, f, d }) => ({ t, s, f, d })), fromJson(file).chords);
+    truth.map(({ t, s, f, d }) => ({ t, s, f, d })), fromJson(file).chords, fromJson(file).backing);
   assert.equal(text, file);
   assert.equal(fromJson(text).notes.length, truth.length);
   assert.equal(fromJson(text).chords.at(-1).name, 'Dm');
   assert.throws(() => fromJson('{"format":"x"}'), /yalla-song/);
   assert.throws(() => fromJson('{"format":"yalla-song/1","notes":[{"t":0,"s":9,"f":0,"d":1}]}'), /Ungültige/);
+});
+
+test('the backing the app plays is saved with the song and read back', () => {
+  const notes = [{ t: 0, s: 1, f: 0, d: 2 }];
+  const plain = toJson({ id: 'x', title: 'X', bpm: 90 }, notes);
+  assert.equal(JSON.parse(plain).backing, undefined);
+  assert.deepEqual(backingOf(fromJson(plain).backing), { guitar: 'both', rhythm: 'auto', darbuka: true });
+  const text = toJson({ id: 'x', title: 'X', bpm: 90 }, notes, [], { guitar: 'strum', rhythm: 'baladi', darbuka: false });
+  assert.deepEqual(JSON.parse(text).backing, { guitar: 'strum', rhythm: 'baladi', darbuka: false });
+  assert.deepEqual(backingOf(fromJson(text).backing), { guitar: 'strum', rhythm: 'baladi', darbuka: false });
+  assert.deepEqual(backingOf({ rhythm: 'saidi' }), { guitar: 'both', rhythm: 'saidi', darbuka: true });
+  assert.throws(() => fromJson(text.replace('baladi', 'polka')), /Begleitung/);
+  assert.throws(() => backingOf({ darbuka: 'ja' }), /Begleitung/);
+  // The app's songs carry theirs.
+  for (const id of ['badak', 'lamma-bada']) {
+    const song = fromJson(readFileSync(new URL(`../../assets/songs/${id}.json`, import.meta.url), 'utf8'));
+    assert.ok(song.backing, id);
+  }
 });
 
 test('file names from titles', () => {
